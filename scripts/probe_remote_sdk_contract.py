@@ -139,6 +139,11 @@ def main() -> int:
             name: _signature(getattr(sdk, name, None))
             for name in functions
         }
+        rd = getattr(sdk, "rd", None)
+        rd_signatures = {
+            name: _signature(getattr(rd, name, None))
+            for name in ("get", "get_data")
+        }
 
         native_init_error = None
         native_init = getattr(sdk, "init", None)
@@ -225,6 +230,7 @@ def main() -> int:
             "sdk_module": module_name,
             "sdk_module_file": getattr(sdk, "__file__", None),
             "sdk_signatures": signatures,
+            "rd_signatures": rd_signatures,
             "native_init_status": "PASS" if native_init_error is None else "UNKNOWN",
             "native_init_error": native_init_error,
             "online_init_status": "PASS" if online_init_error is None else "REJECT",
