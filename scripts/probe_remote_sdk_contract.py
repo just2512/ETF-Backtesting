@@ -147,6 +147,8 @@ def main() -> int:
             "get_price",
             "get_trade_days",
             "get_history_constituents",
+            "get_index_stocks",
+            "get_index_weights",
             "get_fundamentals",
             "get_last_tick",
         )
