@@ -87,7 +87,7 @@ def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
 def test_strategy_c_s1_sell_is_based_on_position_at_signal_close() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "C",
-        {"510300": bars("510300", [10, 10, 4, 13, 13])},
+        {"510300": bars("510300", [10, 10, 4, 13, 13], [10, 10, 4, 4, 13])},
         DAYS,
         initial_cash=Decimal("10000"),
         costs=free_costs(),
@@ -117,7 +117,7 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
             "159928": bars("159928", [10, 8, 4, 4, 4]),
         },
         DAYS,
-        initial_cash=Decimal("5000"),
+        initial_cash=Decimal("10000"),
         costs=free_costs(),
         dividend_status="UNKNOWN",
         execution_rules_status="UNKNOWN",
@@ -130,7 +130,7 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
             "510300": Decimal("100000"),
             "159928": Decimal("100000"),
         },
-        reserve_cash=Decimal("1000"),
+        reserve_cash=Decimal("6000"),
         bollinger_period=3,
         bollinger_deviations=1.0,
     )
@@ -139,8 +139,8 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
     assert [item.symbol for item in executions] == ["510300", "159928"]
     assert [item.status for item in executions] == ["REJECTED", "FILLED"]
     assert "allocated cash budget" in (executions[0].reason or "")
-    assert result.execution.ledger.cash == Decimal("3000")
-    assert result.execution.ledger.positions["159928"] == Decimal("500")
+    assert result.execution.ledger.cash == Decimal("9600")
+    assert result.execution.ledger.positions["159928"] == Decimal("100")
     assert result.execution.ledger.positions.get("510300", Decimal("0")) == 0
 
 
