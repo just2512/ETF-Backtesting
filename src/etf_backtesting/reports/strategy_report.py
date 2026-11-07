@@ -82,9 +82,11 @@ def build_strategy_report(
         "gates": {
             "dividend": result.dividend_gate,
             "execution_rules": result.execution_rules_gate,
+            "index_exposure": result.index_exposure_gate,
             "formal_result_allowed": (
                 result.dividend_gate == "PASS"
                 and result.execution_rules_gate == "PASS"
+                and result.index_exposure_gate in ("PASS", "NOT_APPLICABLE")
                 and not result.research_only
             ),
         },
