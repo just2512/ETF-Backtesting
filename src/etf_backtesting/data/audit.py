@@ -188,3 +188,36 @@ def audit_adjustment_factor_coverage(
         "Adjustment-factor records and semantics were verified.",
         evidence={"count": len(rows)},
     )
+
+
+
+def summarize_findings(findings: Iterable[AuditFinding]) -> dict[str, Any]:
+    """Aggregate findings with hard-gate precedence: REJECT, MISSING, UNKNOWN, PASS."""
+    items = list(findings)
+    counts = {status.value: 0 for status in AuditStatus}
+    for item in items:
+        counts[item.status.value] += 1
+
+    if counts[AuditStatus.REJECT.value]:
+        overall = AuditStatus.REJECT
+    elif counts[AuditStatus.MISSING.value]:
+        overall = AuditStatus.MISSING
+    elif counts[AuditStatus.UNKNOWN.value]:
+        overall = AuditStatus.UNKNOWN
+    else:
+        overall = AuditStatus.PASS
+
+    return {
+        "overall_status": overall.value,
+        "counts": counts,
+        "findings": [
+            {
+                "status": item.status.value,
+                "check": item.check,
+                "message": item.message,
+                "symbol": item.symbol,
+                "evidence": item.evidence,
+            }
+            for item in items
+        ],
+    }
