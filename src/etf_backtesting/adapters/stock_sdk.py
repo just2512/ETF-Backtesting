@@ -205,15 +205,35 @@ class StockSDKAdapter:
 
     def read_history_constituents(self, index_id: str, as_of: date) -> Any:
         """Return the provider's dated historical index constituent/weight snapshot."""
-        index_api = os.getenv("STOCKSDK_INDEX_API", "get_history_constituents")
-        getter = getattr(self.sdk, index_api, None)
-        if not callable(getter):
-            raise TypeError(
-                f"stock_sdk module must expose configured historical-index API {index_api}()"
-            )
         if not index_id:
             raise ValueError("index_id must not be empty; include the provider exchange suffix")
-        return getter(index_id, date=as_of.isoformat())
+        index_api = os.getenv("STOCKSDK_INDEX_API", "").strip()
+        if index_api:
+            getter = getattr(self.sdk, index_api, None)
+            if not callable(getter):
+                raise TypeError(
+                    f"stock_sdk module must expose configured historical-index API {index_api}()"
+                )
+            return getter(index_id, date=as_of.isoformat())
+
+        stocks_api = os.getenv("STOCKSDK_INDEX_STOCKS_API", "get_index_stocks")
+        weights_api = os.getenv("STOCKSDK_INDEX_WEIGHTS_API", "get_index_weights")
+        stocks_getter = getattr(self.sdk, stocks_api, None)
+        weights_getter = getattr(self.sdk, weights_api, None)
+        if callable(stocks_getter) and callable(weights_getter):
+            return {
+                "stocks": stocks_getter(index_id, date=as_of.isoformat()),
+                "weights": weights_getter(index_id, date=as_of.isoformat()),
+            }
+
+        fallback_api = "get_history_constituents"
+        fallback_getter = getattr(self.sdk, fallback_api, None)
+        if callable(fallback_getter):
+            return fallback_getter(index_id, date=as_of.isoformat())
+        raise TypeError(
+            "stock_sdk must expose either the configured combined index API or "
+            f"both {stocks_api}() and {weights_api}()"
+        )
 
     def probe_symbol(self, symbol: str) -> dict[str, object]:
         """Summarize online observed coverage without claiming calendar completeness."""
