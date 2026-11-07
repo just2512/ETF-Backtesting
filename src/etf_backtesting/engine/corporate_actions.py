@@ -18,7 +18,7 @@ class ETFDividend:
     def __post_init__(self) -> None:
         if not self.symbol:
             raise ValueError("dividend symbol must not be empty")
-        if not self.ex_date <= self.record_date < self.pay_date:
+        if not self.record_date <= self.ex_date < self.pay_date:
             raise ValueError("dividend dates must satisfy ex_date <= record_date < pay_date")
         if self.cash_per_share < 0:
             raise ValueError("cash_per_share must not be negative")
