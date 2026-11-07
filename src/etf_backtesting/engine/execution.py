@@ -293,4 +293,5 @@ class ExecutionEngine:
             status, order.symbol, order.side, order.execution_date,
             Decimal("0"), None, Decimal("0"), Decimal("0"), reason,
             signal_date=order.signal_date,
+            requested_quantity=order.quantity,
         )
