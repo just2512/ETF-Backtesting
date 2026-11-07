@@ -226,3 +226,34 @@ def test_formal_run_requires_explicit_execution_model_and_market_contexts() -> N
             execution_model=ExecutionModel(Decimal("0"), Decimal("0")),
             execution_contexts={},
         )
+
+
+def test_formal_strategy_run_uses_dated_quotes_and_limit_context() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    context = ExecutionMarketContext(
+        bid=Decimal("10"),
+        ask=Decimal("10"),
+        limit_up=Decimal("11"),
+        limit_down=Decimal("9"),
+        suspended=False,
+        upper_limit_locked=False,
+        lower_limit_locked=False,
+    )
+    result = StrategyBacktestRunner().run(
+        "A",
+        {"510300": bars("510300", [10, 10, 10, 10, 10])},
+        DAYS,
+        initial_cash=Decimal("10000"),
+        costs=free_costs(),
+        dividend_status="PASS",
+        execution_rules_status="PASS",
+        execution_model=ExecutionModel(Decimal("0"), Decimal("0")),
+        execution_contexts={(DAYS[1], "510300"): context},
+        dca_budget_by_symbol={"510300": Decimal("5000")},
+        dca_dates={DAYS[0]},
+    )
+
+    assert result.research_only is False
+    assert result.execution.executions[0].status == "FILLED"
+    assert result.execution.executions[0].fill_price == Decimal("10")
