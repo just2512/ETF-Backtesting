@@ -52,6 +52,7 @@ class StrategyComparisonRunner:
         sell_mode: str,
         dividend_status: GateStatus,
         execution_rules_status: GateStatus,
+        dividend_snapshot_sha256: str | None = None,
         index_exposure_status: GateStatus | None = None,
         execution_model: ExecutionModel | None = None,
         execution_contexts: Mapping[
@@ -84,6 +85,7 @@ class StrategyComparisonRunner:
             "initial_cash": initial_cash,
             "costs": costs,
             "dividend_status": dividend_status,
+            "dividend_snapshot_sha256": dividend_snapshot_sha256,
             "execution_rules_status": execution_rules_status,
             "execution_model": execution_model,
             "execution_contexts": execution_contexts,
