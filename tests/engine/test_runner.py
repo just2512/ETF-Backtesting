@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from etf_backtesting.contracts import PriceBar
+from etf_backtesting.engine.corporate_actions import ETFDividend
 from etf_backtesting.engine.execution import OrderIntent, TradingCostModel
 from etf_backtesting.engine.runner import PortfolioBacktestRunner
 from etf_backtesting.reports.performance import unitized_nav
@@ -56,3 +57,34 @@ def test_runner_records_no_fill_when_execution_bar_is_absent() -> None:
     )
     assert result.executions[0].status == "NO_FILL"
     assert result.ledger.cash == Decimal("1000")
+
+
+
+def test_runner_credits_etf_dividend_using_record_date_shares() -> None:
+    day1 = date(2024, 1, 2)
+    ex_date = date(2024, 1, 3)
+    pay_date = date(2024, 1, 5)
+    bars = {
+        "510300": [
+            PriceBar("510300", day1, 10, 10, 10, 10),
+            PriceBar("510300", ex_date, 9.5, 9.5, 9.5, 9.5),
+            PriceBar("510300", pay_date, 9.5, 9.5, 9.5, 9.5),
+        ]
+    }
+    order = OrderIntent("510300", "BUY", Decimal("100"), date(2024, 1, 1), day1)
+    dividend = ETFDividend(
+        "510300", ex_date, day1, pay_date, Decimal("0.5")
+    )
+    result = PortfolioBacktestRunner().run(
+        bars,
+        [order],
+        Decimal("1000"),
+        TradingCostModel(Decimal("0"), Decimal("0")),
+        dividends=[dividend],
+    )
+    pay_snapshot = next(item for item in result.snapshots if item.trade_date == pay_date)
+    assert pay_snapshot.cash_distribution == Decimal("50.0")
+    assert pay_snapshot.cash == Decimal("50.0")
+    assert pay_snapshot.holdings_value == Decimal("950.0")
+    assert pay_snapshot.total_value == Decimal("1000.0")
+    assert result.ledger.cost_basis["510300"] == Decimal("1000")
