@@ -32,7 +32,7 @@ def unitized_nav(
 ) -> list[Decimal]:
     """Unitize returns while excluding external flows at the declared period boundary."""
 
-    if not account_values or len(account_values) != len(end_of_period_external_flows):
+    if not account_values or len(account_values) != len(external_flows):
         raise ValueError("account values and external flows must have the same non-zero length")
     if account_values[0] <= 0:
         raise ValueError("initial account value must be positive")
