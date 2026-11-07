@@ -26,8 +26,6 @@ def _sample_payload(raw: Any) -> dict[str, object]:
     if raw is None:
         return {"status": "MISSING", "row_count": 0, "columns": [], "sample_rows": []}
 
-    if callable(getattr(raw, "columns", None)):
-        pass
     columns = getattr(raw, "columns", None)
     if columns is not None:
         names = [str(item) for item in list(columns)]
