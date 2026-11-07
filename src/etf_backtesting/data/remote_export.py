@@ -134,3 +134,29 @@ def export_snapshot(
     return manifest
 
 
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--symbols", nargs="+", default=list(DEFAULT_SYMBOLS))
+    parser.add_argument(
+        "--output",
+        default="data/snapshots/remote-stock-sdk",
+        help="snapshot directory (default: data/snapshots/remote-stock-sdk)",
+    )
+    args = parser.parse_args()
+
+    try:
+        adapter = StockSDKAdapter.from_environment()
+        manifest = export_snapshot(adapter, args.symbols, Path(args.output))
+    except Exception as exc:
+        print(
+            f"remote snapshot export failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        return 4
+
+    results = manifest["symbols"]
+    missing = any(item["status"] != "PASS" for item in results)
+    unknown_calendar = any(item["calendar_completeness"] != "PASS" for item in results)
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    return 3 if missing else 4 if unknown_calendar else 0
