@@ -72,3 +72,5 @@
 - 适配器提供 probe_symbol() / probe_universe()，输出观察到的日线覆盖与质量检查；无权威交易日历时保持 UNKNOWN。
 - CI：stock_sdk adapter PR #20 已合并，精确分支 HEAD 8425d10de8cfb32a3e949c9ef590cec3a4c44629 的 lint / pytest 均 PASS；main 合并提交 3356da86f8561b5ce0556e0f550406d56405aa73 的 CI PASS。
 - 尚未完成真实远程联通验收：GitHub Actions 无法访问用户指定的远程服务，实际字段结构、五只 ETF 历史覆盖、复权因子、分红事件及历史指数成分/权重仍须在用户运行环境探测。远程服务页面的功能描述不等同于已验证的历史时点数据契约。
+
+- 已增加本地命令 scripts/probe_stock_sdk.py，默认探测五只 ETF 并输出 reports/audit/stock_sdk_probe.json；当前尚未收到该脚本在用户机器上的真实运行结果。
