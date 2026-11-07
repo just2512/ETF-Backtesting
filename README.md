@@ -98,3 +98,14 @@ python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30
 ### 执行约束配置
 
 正式成交需要逐证券逐交易日的 `ExecutionMarketContext`（bid/ask、涨跌停价、停牌及封板状态）和显式 `ExecutionModel`（滑点、价格冲击、价差上限）。配置模板位于 `config/execution_model.yaml`，未取得历史报价和规则数据前保持 null，不允许用零滑点或 OHLC 开盘价冒充真实成交约束。次日跳空超过分配预算时会按整手部分成交，现金储备在实际成交价再次检查。
+
+
+### 官方ETF现金分红事件导入
+
+现金分红事件必须来自基金管理人/交易所官方公告，且每只ETF都要有覆盖证明。事件表字段：`symbol,ex_date,record_date,pay_date,cash_per_share,announcement_date,source_name,source_url`；覆盖表字段：`symbol,coverage_start,coverage_end,source_name,source_url`。
+
+```powershell
+python scripts/import_dividends.py --events data/raw/official_dividends.csv --coverage data/raw/dividend_coverage.csv --symbols 510300 510880 513020 159928 159611 --coverage-start 2012-01-01 --coverage-end 2026-11-07 --approved-domain <官方公告域名>
+```
+
+导入器要求每只ETF的覆盖区间完整、来源域名在显式白名单中、公告日期不晚于除息日、现金分红金额有效。某只ETF没有事件时，只有完整覆盖证明才能表示“该区间未发现分红”；缺少覆盖声明不会默认为零。导出 manifest 的 SHA-256 必须传入正式回测的 `dividend_snapshot_sha256`。

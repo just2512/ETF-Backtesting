@@ -85,6 +85,7 @@ def build_strategy_report(
         "research_only": result.research_only,
         "gates": {
             "dividend": result.dividend_gate,
+            "dividend_snapshot_sha256": result.dividend_snapshot_sha256,
             "execution_rules": result.execution_rules_gate,
             "index_exposure": result.index_exposure_gate,
             "formal_result_allowed": (
@@ -96,6 +97,7 @@ def build_strategy_report(
         },
         "reproducibility": {
             "data_snapshot_sha256": data_snapshot_sha256.lower(),
+            "dividend_snapshot_sha256": result.dividend_snapshot_sha256,
             "run_config_sha256": config_sha,
             "run_config": dict(run_config),
             "flow_timing": "BEGINNING",

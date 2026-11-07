@@ -42,6 +42,7 @@ class StrategyRunResult:
     strategy: StrategyName
     execution: BacktestRunResult
     dividend_gate: GateStatus
+    dividend_snapshot_sha256: str | None
     execution_rules_gate: GateStatus
     index_exposure_gate: GateStatus
     research_only: bool
@@ -325,6 +326,7 @@ class StrategyBacktestRunner:
         costs: TradingCostModel,
         dividend_status: GateStatus,
         execution_rules_status: GateStatus,
+        dividend_snapshot_sha256: str | None = None,
         index_exposure_status: GateStatus | None = None,
         execution_model: ExecutionModel | None = None,
         execution_contexts: Mapping[tuple[date, str], ExecutionMarketContext] | None = None,
@@ -337,6 +339,23 @@ class StrategyBacktestRunner:
             raise ValueError(
                 "strategies A/B/C run one ETF per comparison; strategy D is the multi-ETF shared-pool run"
             )
+        if dividend_status == "PASS":
+            if dividend_snapshot_sha256 is None or len(dividend_snapshot_sha256) != 64 or any(
+                character not in "0123456789abcdefABCDEF"
+                for character in dividend_snapshot_sha256
+            ):
+                raise ValueError(
+                    "dividend PASS requires a 64-character official dividend snapshot SHA-256"
+                )
+            if any(
+                event.announcement_date is None
+                or event.source_name is None
+                or event.source_url is None
+                for event in dividends
+            ):
+                raise ValueError(
+                    "dividend PASS requires provenance on every dividend event"
+                )
         industry_caps_enabled = bool(strategy_options.get("industry_caps_enabled", False))
         if strategy == "D" and industry_caps_enabled:
             if index_exposure_status is None:
@@ -414,6 +433,7 @@ class StrategyBacktestRunner:
             strategy=strategy,
             execution=execution,
             dividend_gate=dividend_status,
+            dividend_snapshot_sha256=dividend_snapshot_sha256,
             execution_rules_gate=execution_rules_status,
             index_exposure_gate=index_exposure_status,
             research_only=research_only,

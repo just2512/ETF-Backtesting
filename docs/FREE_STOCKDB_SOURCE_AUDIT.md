@@ -178,3 +178,13 @@ python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-0
 ```
 
 探测文件 `reports/audit/remote_sdk_contract.json` 会记录真实导入模块路径、函数签名、历史指数返回的字段名/数据类型/样例行、数值列范围/合计及交易日历样本。它不会根据列名猜权重单位，也不会把当前成分当作历史成分。只有拿到该原始输出，才能把 `--symbol-field`、`--weight-field` 和 `--weight-scale` 填入 `scripts/export_index_history.py` 并生成可审计快照。
+
+
+## 官方ETF分红数据门禁
+
+新增 `scripts/import_dividends.py`，输入为两份由官方公告整理的CSV：
+
+1. 事件表：每次分红的除息日、登记日、派息日、每份分红金额、公告日期、公告URL。
+2. 覆盖表：每只ETF的官方来源及覆盖起止日期。
+
+五只ETF必须全部声明覆盖整个回测区间。没有事件记录但覆盖声明完整，才可表示该区间未发现分红；缺失覆盖声明一律 UNKNOWN。事件公告URL必须为白名单域名下的HTTPS地址，公告日期不能晚于除息日。两份CSV生成组合SHA-256，正式策略运行必须传入该哈希。当前未取得实际官方公告CSV，分红门禁仍 MISSING。

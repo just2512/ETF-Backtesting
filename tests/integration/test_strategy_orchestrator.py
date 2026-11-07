@@ -192,6 +192,7 @@ def test_strategy_d_formal_industry_caps_require_historical_index_gate() -> None
             initial_cash=Decimal("10000"),
             costs=free_costs(),
             dividend_status="PASS",
+            dividend_snapshot_sha256="a" * 64,
             execution_rules_status="PASS",
             per_etf_cycle_budget={"510300": Decimal("5000")},
             max_market_value_by_symbol={"510300": Decimal("100000")},
@@ -210,6 +211,7 @@ def test_formal_run_requires_explicit_execution_model_and_market_contexts() -> N
         "initial_cash": Decimal("10000"),
         "costs": free_costs(),
         "dividend_status": "PASS",
+        "dividend_snapshot_sha256": "a" * 64,
         "execution_rules_status": "PASS",
         "dca_budget_by_symbol": {"510300": Decimal("5000")},
         "dca_dates": {DAYS[0]},
@@ -247,6 +249,7 @@ def test_formal_strategy_run_uses_dated_quotes_and_limit_context() -> None:
         initial_cash=Decimal("10000"),
         costs=free_costs(),
         dividend_status="PASS",
+        dividend_snapshot_sha256="a" * 64,
         execution_rules_status="PASS",
         execution_model=ExecutionModel(Decimal("0"), Decimal("0")),
         execution_contexts={(DAYS[1], "510300"): context},
@@ -257,3 +260,19 @@ def test_formal_strategy_run_uses_dated_quotes_and_limit_context() -> None:
     assert result.research_only is False
     assert result.execution.executions[0].status == "FILLED"
     assert result.execution.executions[0].fill_price == Decimal("10")
+
+
+def test_dividend_pass_requires_official_snapshot_hash() -> None:
+    with pytest.raises(ValueError, match="official dividend snapshot SHA-256"):
+        StrategyBacktestRunner().run(
+            "A",
+            {"510300": bars("510300", [10, 10, 10, 10, 10])},
+            DAYS,
+            initial_cash=Decimal("10000"),
+            costs=free_costs(),
+            dividend_status="PASS",
+            execution_rules_status="PASS",
+            research_only=True,
+            dca_budget_by_symbol={"510300": Decimal("1000")},
+            dca_dates=set(),
+        )
