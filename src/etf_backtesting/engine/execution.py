@@ -114,7 +114,7 @@ class OrderIntent:
 
 @dataclass(frozen=True, slots=True)
 class ExecutionResult:
-    status: Literal["FILLED", "NO_FILL", "REJECTED"]
+    status: Literal["FILLED", "PARTIAL", "NO_FILL", "REJECTED"]
     symbol: str
     side: str
     execution_date: date
@@ -124,6 +124,7 @@ class ExecutionResult:
     fee: Decimal
     reason: str | None = None
     signal_date: date | None = None
+    requested_quantity: Decimal | None = None
 
 
 class ExecutionEngine:
@@ -227,33 +228,60 @@ class ExecutionEngine:
                         return self._result(order, "REJECTED", reason="sell price is below lower limit")
         notional = order.quantity * price
         fee = costs.calculate(notional)
+        filled_quantity = order.quantity
+        status: Literal["FILLED", "PARTIAL"] = "FILLED"
         if order.side == "BUY":
+            available_budget = ledger.cash - self.minimum_cash_reserve
+            if order.cash_limit is not None:
+                available_budget = min(available_budget, order.cash_limit)
             total_cost = notional + fee
-            if order.cash_limit is not None and total_cost > order.cash_limit:
-                return self._result(
-                    order,
-                    "REJECTED",
-                    reason="execution cost exceeds allocated cash budget",
+            if total_cost > available_budget:
+                filled_quantity = self._max_affordable_quantity(
+                    order.quantity, price, available_budget, costs
                 )
-            if total_cost > ledger.cash:
-                return self._result(order, "REJECTED", reason="insufficient cash")
-            if ledger.cash - total_cost < self.minimum_cash_reserve:
-                return self._result(
-                    order,
-                    "REJECTED",
-                    reason="minimum cash reserve would be breached",
-                )
-            ledger.buy(order.symbol, order.quantity, price, fee)
+                if filled_quantity <= 0:
+                    return self._result(
+                        order,
+                        "REJECTED",
+                        reason="insufficient allocated cash or cash reserve",
+                    )
+                status = "PARTIAL"
+                notional = filled_quantity * price
+                fee = costs.calculate(notional)
+            ledger.buy(order.symbol, filled_quantity, price, fee)
         else:
             if order.quantity > ledger.positions.get(order.symbol, Decimal("0")):
                 return self._result(order, "REJECTED", reason="insufficient position")
             ledger.sell(order.symbol, order.quantity, price, fee)
 
         return ExecutionResult(
-            "FILLED", order.symbol, order.side, order.execution_date,
-            order.quantity, price, notional, fee,
+            status, order.symbol, order.side, order.execution_date,
+            filled_quantity, price, notional, fee,
             signal_date=order.signal_date,
+            requested_quantity=order.quantity,
         )
+
+    def _max_affordable_quantity(
+        self,
+        requested_quantity: Decimal,
+        price: Decimal,
+        budget: Decimal,
+        costs: TradingCostModel,
+    ) -> Decimal:
+        """Return the largest whole-lot buy quantity within budget, including fees."""
+        if budget <= 0:
+            return Decimal("0")
+        maximum_lots = int(requested_quantity // self.lot_size)
+        low, high = 0, maximum_lots
+        while low < high:
+            middle = (low + high + 1) // 2
+            quantity = Decimal(middle) * self.lot_size
+            notional = quantity * price
+            if notional + costs.calculate(notional) <= budget:
+                low = middle
+            else:
+                high = middle - 1
+        return Decimal(low) * self.lot_size
 
     @staticmethod
     def _result(
