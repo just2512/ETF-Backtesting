@@ -152,6 +152,18 @@ class StockSDKAdapter:
         for symbol in symbols:
             try:
                 results.append(self.probe_symbol(symbol))
+            except (ValueError, TypeError) as exc:
+                results.append({
+                    "symbol": symbol,
+                    "source": self.SOURCE_NAME,
+                    "daily_bar_status": "REJECT",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "adjustment_factor_status": "UNKNOWN",
+                    "corporate_action_status": "UNKNOWN",
+                    "historical_index_constituent_status": "UNKNOWN",
+                    "calendar_completeness": "UNKNOWN",
+                })
             except Exception as exc:
                 results.append({
                     "symbol": symbol,
