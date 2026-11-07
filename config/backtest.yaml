@@ -1,0 +1,31 @@
+# Required capital/risk parameters intentionally left unset until confirmed.
+capital:
+  initial_cash: null
+  contribution_schedule: null
+  contribution_amount: null
+  minimum_cash_reserve: null
+
+portfolio:
+  per_etf_max_market_value: null
+  industry_exposure_caps: null
+  lot_size: 100
+
+bollinger:
+  period: 20
+  standard_deviation_multiplier: 2.0
+  standard_deviation_ddof: 0
+  signal_timing: "AFTER_CLOSE"
+  execution_timing: "NEXT_SESSION_OPEN"
+  buy_tiers:
+    - { percent_b_lte: 0.0, budget_fraction: 0.20 }
+    - { percent_b_lte: -0.10, budget_fraction: 0.20 }
+    - { percent_b_lte: -0.20, budget_fraction: 0.25 }
+    - { percent_b_lte: -0.30, budget_fraction: 0.35 }
+
+sell_modes:
+  S0: { enabled: true }
+  S1: { sell_fraction: 0.20 }
+  S2:
+    first_sell_fraction: 0.10
+    second_sell_fraction: 0.10
+    second_trigger_percent_b_lte: 0.50
