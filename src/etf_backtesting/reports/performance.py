@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from decimal import Decimal
+from typing import Literal
 
 
 def mark_to_market(
@@ -26,21 +27,32 @@ def mark_to_market(
 
 def unitized_nav(
     account_values: Sequence[Decimal],
-    end_of_period_external_flows: Sequence[Decimal],
+    external_flows: Sequence[Decimal],
+    flow_timing: Literal["BEGINNING", "END"] = "END",
 ) -> list[Decimal]:
-    """Remove end-of-period deposits/withdrawals before calculating investment return."""
+    """Unitize returns while excluding external flows at the declared period boundary."""
+
     if not account_values or len(account_values) != len(end_of_period_external_flows):
         raise ValueError("account values and external flows must have the same non-zero length")
     if account_values[0] <= 0:
         raise ValueError("initial account value must be positive")
+    if flow_timing not in ("BEGINNING", "END"):
+        raise ValueError("flow_timing must be BEGINNING or END")
     nav = [Decimal("1")]
     for previous, current, flow in zip(
-        account_values[:-1], account_values[1:], end_of_period_external_flows[1:], strict=True
+        account_values[:-1], account_values[1:], external_flows[1:], strict=True
     ):
-        pre_flow_value = current - flow
-        if previous <= 0 or pre_flow_value <= 0:
-            raise ValueError("pre-flow account values must be positive")
-        nav.append(nav[-1] * pre_flow_value / previous)
+        if flow_timing == "BEGINNING":
+            denominator = previous + flow
+            if denominator <= 0 or current <= 0:
+                raise ValueError("beginning-flow adjusted account values must be positive")
+            period_factor = current / denominator
+        else:
+            pre_flow_value = current - flow
+            if previous <= 0 or pre_flow_value <= 0:
+                raise ValueError("end-flow adjusted account values must be positive")
+            period_factor = pre_flow_value / previous
+        nav.append(nav[-1] * period_factor)
     return nav
 
 
