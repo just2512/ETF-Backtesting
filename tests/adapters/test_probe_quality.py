@@ -14,3 +14,4 @@ def test_probe_includes_quality_checks_and_calendar_unknown() -> None:
     findings = {item["check"]: item for item in report["data_quality_findings"]}
     assert findings["ohlc_and_record_validity"]["status"] == "PASS"
     assert findings["trade_date_completeness"]["status"] == "UNKNOWN"
+    assert report["data_quality_summary"]["overall_status"] == "UNKNOWN"
