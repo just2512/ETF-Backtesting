@@ -1,0 +1,31 @@
+free_stockdb:
+  enabled: true
+  host_env: "FREESTOCKDB_HOST"
+  default_host: "127.0.0.1"
+  port_env: "FREESTOCKDB_PORT"
+  default_port: 7899
+  sdk_module_env: "FREESTOCKDB_SDK_MODULE"
+  default_sdk_module: "stock_sdk"
+  daily_price_basis: "UNADJUSTED"
+  adjustment_factor_semantics: "UNVERIFIED"
+  cash_dividend_endpoint: null
+  historical_index_constituent_endpoint: null
+
+historical_index_data:
+  provider: null
+  status: "UNKNOWN"
+  required_fields:
+    - index_id
+    - constituent_symbol
+    - effective_from
+    - effective_to
+    - weight
+    - source
+
+trading_calendar:
+  provider: null
+  status: "UNKNOWN"
+  required_fields:
+    - market
+    - trade_date
+    - is_open
