@@ -123,8 +123,8 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
         execution_rules_status="UNKNOWN",
         research_only=True,
         per_etf_cycle_budget={
-            "510300": Decimal("10000"),
-            "159928": Decimal("10000"),
+            "510300": Decimal("5000"),
+            "159928": Decimal("5000"),
         },
         max_market_value_by_symbol={
             "510300": Decimal("100000"),
