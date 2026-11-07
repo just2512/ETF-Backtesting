@@ -33,6 +33,8 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         sample_rows = raw.head(5).to_dict(orient="records")
         dtypes = {str(key): str(value) for key, value in raw.dtypes.items()}
         source_rows = raw.to_dict(orient="records")
+        index_name = getattr(raw.index, "name", None)
+        index_sample = [str(value) for value in list(raw.index[:5])]
     elif isinstance(raw, Mapping):
         names = [str(key) for key in raw]
         values = list(raw.values())
@@ -54,6 +56,8 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         row_count = len(source_rows)
         sample_rows = source_rows[:5]
         dtypes = {}
+        index_name = None
+        index_sample = []
     elif isinstance(raw, (list, tuple)):
         row_count = len(raw)
         sample_rows = list(raw[:5])
@@ -61,6 +65,8 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         names = list(first) if isinstance(first, Mapping) else []
         source_rows = sample_rows if names else []
         dtypes = {}
+        index_name = None
+        index_sample = []
     else:
         return {
             "status": "UNKNOWN",
@@ -95,6 +101,8 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         "row_count": row_count,
         "columns": names,
         "dtypes": dtypes,
+        "index_name": index_name,
+        "index_sample": index_sample,
         "numeric_column_summaries": numeric_summary,
         "sample_rows": sample_rows,
     }
