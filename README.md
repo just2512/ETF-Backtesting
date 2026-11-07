@@ -45,7 +45,7 @@
 
 ## 数据源边界
 
-支持两种 free-stockdb 接入形态：本机 LevelDB 服务（本地适配器）与用户提供的远程 `stock_sdk` 双端服务（远程适配器）。远程日线通过 `rd.get_data(..., fq=None)` 读取不复权 OHLCV；在线财务与 Tick 仅作为补充数据。服务地址通过环境变量配置，不写入仓库。项目不假定任一服务已具备完整历史数据、有效复权因子、分红事件或历史指数成分权重；必须先运行本机覆盖探测并核验字段和数据语义。详见 [数据源审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
+支持两种 free-stockdb 接入形态：本机 LevelDB 服务（本地适配器）与用户提供的远程 `stock_sdk` 双端服务（远程适配器）。远程日线通过在线 `get_price(..., fq=None)` 读取不复权 OHLCV；交易日历与历史指数快照走对应在线 API。原生 `rd.get()` 是独立可选通道，原生端口不可用不得阻断在线回测。在线财务与 Tick 仅作为补充数据。服务地址通过环境变量配置，不写入仓库。项目不假定任一服务已具备完整历史数据、有效复权因子、分红事件或历史指数成分权重；必须先运行本机覆盖探测并核验字段和数据语义。详见 [数据源审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
 
 远程 SDK 覆盖探测（在安装了 `stock_sdk` 的本机执行）：
 
@@ -55,6 +55,17 @@ $env:STOCKSDK_PORT = "7899"
 $env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
 python scripts/probe_stock_sdk.py
 ```
+
+远程历史数据快照导出（仅访问在线 API，不读取本地 LevelDB）：
+
+```powershell
+$env:STOCKSDK_HOST = "106.75.217.246"
+$env:STOCKSDK_PORT = "7899"
+$env:STOCKSDK_ONLINE_ENDPOINT = "106.75.217.246:12328"
+python scripts/export_remote_history.py
+```
+
+默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
 
 ## 关键原则
 
