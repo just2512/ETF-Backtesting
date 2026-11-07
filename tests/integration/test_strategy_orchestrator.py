@@ -141,6 +141,7 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
     assert "allocated cash budget" in (executions[0].reason or "")
     assert result.execution.ledger.cash == Decimal("9600")
     assert result.execution.ledger.positions["159928"] == Decimal("100")
+    assert result.index_exposure_gate == "NOT_APPLICABLE"
     assert result.execution.ledger.positions.get("510300", Decimal("0")) == 0
 
 
@@ -178,4 +179,22 @@ def test_A_B_C_reject_multi_etf_runs_to_avoid_implicit_priority() -> None:
                 "159928": Decimal("10000"),
             },
             bollinger_period=2,
+        )
+
+
+def test_strategy_d_formal_industry_caps_require_historical_index_gate() -> None:
+    with pytest.raises(ValueError, match="requires an explicit index_exposure_status"):
+        StrategyBacktestRunner().run(
+            "D",
+            {"510300": bars("510300", [10, 10, 4, 4, 4])},
+            DAYS,
+            initial_cash=Decimal("10000"),
+            costs=free_costs(),
+            dividend_status="PASS",
+            execution_rules_status="PASS",
+            per_etf_cycle_budget={"510300": Decimal("5000")},
+            max_market_value_by_symbol={"510300": Decimal("100000")},
+            reserve_cash=Decimal("1000"),
+            industry_caps_enabled=True,
+            industry_context_provider=lambda *_: None,
         )
