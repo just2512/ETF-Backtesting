@@ -36,6 +36,56 @@ class TradingCostModel:
         return (commission + other).quantize(self.currency_quantum, rounding=ROUND_HALF_UP)
 
 
+
+@dataclass(frozen=True, slots=True)
+class ExecutionMarketContext:
+    """Point-in-time quote, price-limit, and suspension state for one symbol/session."""
+
+    bid: Decimal | None
+    ask: Decimal | None
+    limit_up: Decimal | None
+    limit_down: Decimal | None
+    suspended: bool | None
+    upper_limit_locked: bool | None
+    lower_limit_locked: bool | None
+
+    def __post_init__(self) -> None:
+        if self.bid is not None and self.bid <= 0:
+            raise ValueError("bid must be positive")
+        if self.ask is not None and self.ask <= 0:
+            raise ValueError("ask must be positive")
+        if self.bid is not None and self.ask is not None and self.ask < self.bid:
+            raise ValueError("ask must not be below bid")
+        if self.limit_up is not None and self.limit_up <= 0:
+            raise ValueError("limit_up must be positive")
+        if self.limit_down is not None and self.limit_down <= 0:
+            raise ValueError("limit_down must be positive")
+        if (
+            self.limit_up is not None
+            and self.limit_down is not None
+            and self.limit_up < self.limit_down
+        ):
+            raise ValueError("limit_up must not be below limit_down")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionModel:
+    """Explicit adverse execution assumptions; no defaults are silently inferred."""
+
+    slippage_bps: Decimal
+    market_impact_bps: Decimal
+    max_spread_bps: Decimal | None = None
+    require_market_context: bool = True
+    require_quotes: bool = True
+    require_limit_status: bool = True
+
+    def __post_init__(self) -> None:
+        if self.slippage_bps < 0 or self.market_impact_bps < 0:
+            raise ValueError("slippage and market impact must not be negative")
+        if self.max_spread_bps is not None and self.max_spread_bps < 0:
+            raise ValueError("max_spread_bps must not be negative")
+
+
 @dataclass(frozen=True, slots=True)
 class OrderIntent:
     symbol: str
@@ -79,6 +129,7 @@ class ExecutionEngine:
         self,
         lot_size: int = 100,
         minimum_cash_reserve: Decimal = Decimal("0"),
+        execution_model: ExecutionModel | None = None,
     ) -> None:
         if lot_size < 1:
             raise ValueError("lot_size must be positive")
@@ -86,6 +137,7 @@ class ExecutionEngine:
             raise ValueError("minimum_cash_reserve must not be negative")
         self.lot_size = Decimal(lot_size)
         self.minimum_cash_reserve = minimum_cash_reserve
+        self.execution_model = execution_model
 
     def execute_next_open(
         self,
@@ -93,6 +145,7 @@ class ExecutionEngine:
         bar: PriceBar | None,
         ledger: PortfolioLedger,
         costs: TradingCostModel,
+        market_context: ExecutionMarketContext | None = None,
     ) -> ExecutionResult:
         if bar is None:
             return self._result(order, "NO_FILL", reason="no execution bar")
@@ -104,6 +157,55 @@ class ExecutionEngine:
             return self._result(order, "REJECTED", reason="quantity is not a whole trading lot")
 
         price = decimal_value(bar.open)
+        model = self.execution_model
+        if model is not None:
+            if model.require_market_context and market_context is None:
+                return self._result(order, "NO_FILL", reason="execution market context missing")
+            if market_context is not None:
+                if market_context.suspended is True:
+                    return self._result(order, "NO_FILL", reason="market context reports suspension")
+                if market_context.suspended is None and model.require_market_context:
+                    return self._result(order, "NO_FILL", reason="suspension status unknown")
+                if order.side == "BUY" and market_context.upper_limit_locked is True:
+                    return self._result(order, "NO_FILL", reason="upper price limit locked")
+                if order.side == "SELL" and market_context.lower_limit_locked is True:
+                    return self._result(order, "NO_FILL", reason="lower price limit locked")
+                if model.require_limit_status and (
+                    market_context.limit_up is None
+                    or market_context.limit_down is None
+                    or market_context.upper_limit_locked is None
+                    or market_context.lower_limit_locked is None
+                ):
+                    return self._result(order, "NO_FILL", reason="price-limit status incomplete")
+                if model.require_quotes and (
+                    market_context.bid is None or market_context.ask is None
+                ):
+                    return self._result(order, "NO_FILL", reason="bid/ask quote missing")
+                if market_context.bid is not None and market_context.ask is not None:
+                    midpoint = (market_context.bid + market_context.ask) / Decimal("2")
+                    spread_bps = (
+                        (market_context.ask - market_context.bid)
+                        / midpoint
+                        * Decimal("10000")
+                    )
+                    if (
+                        model.max_spread_bps is not None
+                        and spread_bps > model.max_spread_bps
+                    ):
+                        return self._result(order, "REJECTED", reason="spread exceeds configured maximum")
+                    price = market_context.ask if order.side == "BUY" else market_context.bid
+                adverse_bps = model.slippage_bps + model.market_impact_bps
+                adjustment = adverse_bps / Decimal("10000")
+                price = (
+                    price * (Decimal("1") + adjustment)
+                    if order.side == "BUY"
+                    else price * (Decimal("1") - adjustment)
+                )
+                if model.require_limit_status:
+                    if order.side == "BUY" and price > market_context.limit_up:
+                        return self._result(order, "REJECTED", reason="buy price exceeds upper limit")
+                    if order.side == "SELL" and price < market_context.limit_down:
+                        return self._result(order, "REJECTED", reason="sell price is below lower limit")
         notional = order.quantity * price
         fee = costs.calculate(notional)
         if order.side == "BUY":
