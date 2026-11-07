@@ -3,6 +3,7 @@ from etf_backtesting.data.audit import (
     audit_adjustment_factor_coverage,
     audit_corporate_action_coverage,
     audit_daily_records,
+    summarize_findings,
 )
 
 
@@ -47,3 +48,20 @@ def test_without_calendar_trade_date_completeness_is_unknown() -> None:
     findings = audit_daily_records("510300", rows)
     coverage = next(item for item in findings if item.check == "trade_date_completeness")
     assert coverage.status == AuditStatus.UNKNOWN
+
+
+
+def test_audit_summary_uses_reject_missing_unknown_pass_precedence() -> None:
+    findings = audit_daily_records("510300", [])
+    summary = summarize_findings(findings)
+    assert summary["overall_status"] == "MISSING"
+    assert summary["counts"]["MISSING"] == 1
+
+
+def test_audit_summary_unknown_blocks_false_pass() -> None:
+    findings = audit_daily_records(
+        "510300",
+        [{"date": "20240102", "open": 3.8, "high": 3.9, "low": 3.7, "close": 3.85}],
+    )
+    summary = summarize_findings(findings)
+    assert summary["overall_status"] == "UNKNOWN"
