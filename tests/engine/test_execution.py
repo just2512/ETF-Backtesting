@@ -195,3 +195,98 @@ def test_buy_partially_fills_to_stay_within_allocated_cash_limit() -> None:
     assert result.requested_quantity == Decimal("500")
     assert ledger.positions["510300"] == Decimal("400")
     assert ledger.cash == Decimal("8000")
+
+
+def test_execution_rejects_spread_above_configured_maximum() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("5000"))
+    order = OrderIntent(
+        "510300", "BUY", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar("510300", date(2024, 1, 3), 10, 11, 9, 10)
+    context = ExecutionMarketContext(
+        bid=Decimal("9"),
+        ask=Decimal("11"),
+        limit_up=Decimal("12"),
+        limit_down=Decimal("8"),
+        suspended=False,
+        upper_limit_locked=False,
+        lower_limit_locked=False,
+    )
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(
+            Decimal("0"), Decimal("0"), max_spread_bps=Decimal("100")
+        )
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0)), context
+    )
+
+    assert result.status == "REJECTED"
+    assert result.reason == "spread exceeds configured maximum"
+    assert ledger.positions == {}
+
+
+def test_sell_is_not_filled_when_lower_limit_is_locked() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("0"))
+    ledger.buy("510300", Decimal("100"), Decimal("10"), Decimal("0"))
+    order = OrderIntent(
+        "510300", "SELL", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar("510300", date(2024, 1, 3), 9, 9.1, 8.9, 9)
+    context = ExecutionMarketContext(
+        bid=Decimal("8.99"),
+        ask=Decimal("9"),
+        limit_up=Decimal("11"),
+        limit_down=Decimal("9"),
+        suspended=False,
+        upper_limit_locked=False,
+        lower_limit_locked=True,
+    )
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(Decimal("0"), Decimal("0"))
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0)), context
+    )
+
+    assert result.status == "NO_FILL"
+    assert result.reason == "lower price limit locked"
+    assert ledger.positions["510300"] == Decimal("100")
+
+
+def test_non_normal_bar_requires_confirmed_suspension_status() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("5000"))
+    order = OrderIntent(
+        "510300", "BUY", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar(
+        "510300", date(2024, 1, 3), 10, 10.2, 9.8, 10,
+        trade_status="SUSPENDED",
+    )
+    context = ExecutionMarketContext(
+        bid=None,
+        ask=None,
+        limit_up=Decimal("11"),
+        limit_down=Decimal("9"),
+        suspended=None,
+        upper_limit_locked=False,
+        lower_limit_locked=False,
+    )
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(Decimal("0"), Decimal("0"))
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0)), context
+    )
+
+    assert result.status == "NO_FILL"
+    assert result.reason == "suspension status unknown for non-normal bar"
