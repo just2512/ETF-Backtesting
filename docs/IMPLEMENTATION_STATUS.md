@@ -4,12 +4,12 @@
 
 | 工作线 | PR | 已落地内容 | CI |
 |---|---:|---|---|
-| 数据接入 | [#1](https://github.com/just2512/ETF-Backtesting/pull/1) | free-stockdb SDK适配、原始行情读取、复权因子探测、本地覆盖探测脚本、源码静态审计 | PASS |
-| 数据审计 | [#2](https://github.com/just2512/ETF-Backtesting/pull/2)、[#5](https://github.com/just2512/ETF-Backtesting/pull/5) | OHLCV基础质量审计、重复日期、异常记录、交易日历缺口、公司行为/复权状态区分 | PASS |
-| 指数重叠 | [#3](https://github.com/just2512/ETF-Backtesting/pull/3)、[#6](https://github.com/just2512/ETF-Backtesting/pull/6) | 成分Jaccard、权重重叠、按生效日期重建历史快照、组合穿透暴露 | PASS |
-| 回测引擎 | [#4](https://github.com/just2512/ETF-Backtesting/pull/4)、[#7](https://github.com/just2512/ETF-Backtesting/pull/7) | 布林带、现金/份额账本、下一交易日开盘成交、交易费用、现金池、定投与布林信号状态机 | PASS |
+| 数据接入 | [#1](https://github.com/just2512/ETF-Backtesting/pull/1)、[#8](https://github.com/just2512/ETF-Backtesting/pull/8)、[#10](https://github.com/just2512/ETF-Backtesting/pull/10)、[#12](https://github.com/just2512/ETF-Backtesting/pull/12)、[#14](https://github.com/just2512/ETF-Backtesting/pull/14)、[#17](https://github.com/just2512/ETF-Backtesting/pull/17) | free-stockdb适配、原始行情探测、质量汇总、复权因子语义门禁、JSON本地报告 | PASS |
+| 数据审计 | [#2](https://github.com/just2512/ETF-Backtesting/pull/2)、[#5](https://github.com/just2512/ETF-Backtesting/pull/5)、[#13](https://github.com/just2512/ETF-Backtesting/pull/13) | OHLCV、重复/异常、交易日历缺口、硬门禁状态汇总 | PASS |
+| 指数重叠 | [#3](https://github.com/just2512/ETF-Backtesting/pull/3)、[#6](https://github.com/just2512/ETF-Backtesting/pull/6)、[#15](https://github.com/just2512/ETF-Backtesting/pull/15) | 历史生效区间快照、成分/权重重叠、组合穿透、CSV报告 | PASS |
+| 回测引擎 | [#4](https://github.com/just2512/ETF-Backtesting/pull/4)、[#7](https://github.com/just2512/ETF-Backtesting/pull/7)、[#9](https://github.com/just2512/ETF-Backtesting/pull/9)、[#11](https://github.com/just2512/ETF-Backtesting/pull/11)、[#18](https://github.com/just2512/ETF-Backtesting/pull/18) | 布林/定投信号、S0/S1/S2卖出、订单编译、下一交易日成交、公共资金池与行业门禁、分红账本、单位净值和组合运行器 | PASS |
 
-四个工作线均已合并，main 最新集成 CI：48 passed，Lint PASS。
+四个工作线均已合并，main 最新集成 CI：62 passed，Lint PASS。
 
 ## 当前代码范围
 
@@ -17,15 +17,17 @@
 
 ### 已实现
 
-- free-stockdb 本地 SDK 适配器：请求不复权行情用于成交模拟；独立读取 SDK 暴露的累计复权因子记录。
-- 本地探测脚本：对五只候选ETF统计行情数量、首末日期、因子记录数量，并输出OHLC质量检查结果。
+- free-stockdb 本地 SDK 适配器：请求不复权行情用于成交模拟；独立读取SDK累计复权因子；复权指标序列只有在语义独立核验后才允许读取。
+- 本地探测脚本：对五只候选ETF统计行情数量、首末日期、因子记录数量，按时间升序规范化，并输出OHLC质量和硬门禁汇总；支持本地JSON文件输出。
 - 数据质量检查：空数据、重复日期、OHLC、缺失字段、异常数值；提供权威交易日历时可识别缺失交易日，无日历时标记UNKNOWN。
 - 指数重叠：集合重叠、权重重叠、组合穿透暴露；可按成分生效区间重建历史快照，并拒绝权重缺失或不归一。
 - 布林带：20期默认窗口、2倍总体标准差；窗口不足时不生成指标。
 - 账本：买入、卖出、现金分红和外部投入独立记账；按平均成本法维护剩余成本和已实现盈亏。
-- 成交模拟：收盘信号日期与下一交易日执行日期严格分离；按下一交易日开盘价、交易单位和停牌状态执行。
+- 成交模拟与组合运行器：收盘信号日期与下一交易日执行日期严格分离；按下一交易日开盘价、交易单位和停牌状态执行；无当日行情的持仓用最近收盘价估值并标记stale。
+- ETF分红：按登记日持仓份额确定权益，在派息日计入现金账本，分红不计为外部投入。
+- 信号到订单：按信号日收盘价估算整手数量，下一交易日按真实开盘价执行；跳空造成资金不足时拒绝成交。
 - 费用模型：佣金、其他费用、最低佣金和货币精度显式配置，不把未核验费率写成默认事实。
-- 公共资金池：按%B偏离程度排序，执行最低现金储备和单只ETF市值上限。
+- 公共资金池：按%B偏离程度排序，执行最低现金储备和单只ETF市值上限；可根据指数成分与行业映射限制新增资金分配。
 - 行业暴露硬门禁：缺少成分穿透或行业分类时拒绝计算，不静默忽略。
 - 策略信号：固定定投、布林下轨四档单周期触发、S0持有/S1上轨卖出/S2回归通道后分两次卖出。
 - 绩效基础：账户市值、剔除期末外部投入影响的单位净值、最大回撤。
@@ -56,8 +58,8 @@
 
 ## 下一阶段
 
-1. 补充交易日历真实数据源，生成五只ETF实际覆盖与缺口报告。
-2. 接入历史指数成分/权重来源，生成滚动重叠和组合暴露报告。
+1. 在用户本机运行free-stockdb探测脚本，确认五只ETF真实覆盖、因子数量和OHLC质量。
+2. 核验交易日历、ETF分红公告、历史指数成分/权重来源及其授权。
 3. 完成涨跌停、滑点、价差和券商费用规则的成交模拟。
-4. 补齐A/B/C/D完整策略编排、资金流收益计算和报告导出。
-5. 用合成fixture跑通端到端后，再以本机探测结果接入真实行情。
+4. 补齐A/B/C/D完整策略编排、资金流收益计算和滚动/敏感性报告。
+5. 以审计通过的真实数据运行历史回测；在此之前不输出真实策略收益结论。
