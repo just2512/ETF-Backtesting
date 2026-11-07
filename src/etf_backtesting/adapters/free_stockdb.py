@@ -38,7 +38,7 @@ class FreeStockDBAdapter:
         return cls(client_type(host=host, port=port, password=password))
 
     @classmethod
-    def from_environment(cls) -> "FreeStockDBAdapter":
+    def from_environment(cls) -> FreeStockDBAdapter:
         return cls.connect(
             host=os.getenv("FREESTOCKDB_HOST", "127.0.0.1"),
             port=int(os.getenv("FREESTOCKDB_PORT", "7899")),
