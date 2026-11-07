@@ -84,3 +84,17 @@ OHLC/重复日期/字段完整性：五只全部 PASS，无 REJECT；交易日�
 - 历史指数成分及权重接口：MISSING（当前已检查的公开SDK）
 
 在补齐 510300/159928 全史、核验复权因子语义并接入分红/历史指数数据前，不启动真实历史回测，不以当前行业板块映射替代历史指数成分。
+
+
+## 新增远程 stock_sdk 接口线索（2026-11-07）
+
+用户补充了远程双端初始化示例：init(host, port) 与 set_init(host:port)，以及原生 rd.get("日k", symbol, start>end)、在线 get_fundamentals(...) 和 get_last_tick(...)。公开的 free-stockdb Python 示例也展示了 rd.get_data(..., frequency="1d", fq=None) 的不复权读取方式。项目已新增独立 StockSDKAdapter，避免把该远程入口与本机 LevelDB 端口混为一谈。
+
+当前边界：
+1. 用户给出的远程服务地址没有在 GitHub Actions 环境中进行网络连接测试；不能把适配器的模拟测试当作真实服务联通证据。
+2. 适配器使用 rd.get_data 的标准化记录读取 OHLCV；原生 rd.get("日k", ...) 仍原样返回，等待本机输出字段结构核验。
+3. 在线财务查询和 Tick 是补充数据，不构成历史 ETF 日线。
+4. 公开页面提及指数数据能力，但尚未确认可调用函数、指数覆盖清单、权重单位、公布日期与历史有效日期语义；历史指数成分/权重状态维持 UNKNOWN，禁止用最新快照回填历史。
+5. 分红事件接口与复权因子语义同样未完成字段级及事件级验证，维持 UNKNOWN / UNVERIFIED。
+
+本机验证可通过 StockSDKAdapter.from_environment() 初始化，并对 510300、510880、513020、159928、159611 调用 probe_universe()。服务地址只通过环境变量配置：STOCKSDK_HOST、STOCKSDK_PORT、STOCKSDK_ONLINE_ENDPOINT；不要提交真实地址或凭据到仓库。
