@@ -100,10 +100,8 @@ def export_snapshot(
         calendar_start = min(bars[0].trade_date for bars in populated).strftime("%Y%m%d")
         calendar_end = max(bars[-1].trade_date for bars in populated).strftime("%Y%m%d")
         trade_days = adapter.read_trade_days(calendar_start, calendar_end)
-        calendar_set = set(trade_days)
     else:
         trade_days = []
-        calendar_set = set()
 
     for result in symbol_results:
         symbol = str(result["symbol"])
