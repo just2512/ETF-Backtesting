@@ -6,6 +6,7 @@ from etf_backtesting.data.remote_export import export_snapshot
 
 
 class FakeRemoteAdapter:
+    history_api = "get_price"
     def read_daily_bars(self, symbol: str):
         if symbol == "BAD":
             raise ConnectionError("online API unavailable")
@@ -27,6 +28,7 @@ def test_remote_export_writes_hashed_unadjusted_snapshot(tmp_path: Path) -> None
 
     symbol = manifest["symbols"][0]
     assert manifest["fq"] is None
+    assert manifest["history_api"] == "get_price"
     assert manifest["price_basis"] == "UNADJUSTED"
     assert symbol["status"] == "PASS"
     assert symbol["daily_bar_count"] == 2
