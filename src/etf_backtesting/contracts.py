@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Mapping
 
 
 class AuditStatus(StrEnum):
