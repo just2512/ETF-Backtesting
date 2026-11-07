@@ -10,7 +10,13 @@ from decimal import Decimal
 
 from etf_backtesting.contracts import PriceBar
 from etf_backtesting.engine.corporate_actions import ETFDividend
-from etf_backtesting.engine.execution import ExecutionEngine, ExecutionResult, OrderIntent, TradingCostModel
+from etf_backtesting.engine.execution import (
+    ExecutionEngine,
+    ExecutionMarketContext,
+    ExecutionResult,
+    OrderIntent,
+    TradingCostModel,
+)
 from etf_backtesting.engine.ledger import PortfolioLedger
 from etf_backtesting.reports.performance import mark_to_market
 
@@ -56,6 +62,7 @@ class PortfolioBacktestRunner:
         dividends: Sequence[ETFDividend] = (),
         trading_days: Sequence[date] | None = None,
         signal_generator: SignalGenerator | None = None,
+        execution_contexts: Mapping[tuple[date, str], ExecutionMarketContext] | None = None,
     ) -> BacktestRunResult:
         indexed_bars: dict[str, dict[date, PriceBar]] = {}
         all_dates: set[date] = set()
@@ -134,8 +141,15 @@ class PortfolioBacktestRunner:
             # the explicit signal-priority order returned by CashPoolAllocator.
             for order in orders_by_date.get(day, []):
                 bar = indexed_bars.get(order.symbol, {}).get(day)
+                market_context = (
+                    execution_contexts.get((day, order.symbol))
+                    if execution_contexts is not None
+                    else None
+                )
                 executions.append(
-                    self.execution_engine.execute_next_open(order, bar, ledger, costs)
+                    self.execution_engine.execute_next_open(
+                        order, bar, ledger, costs, market_context
+                    )
                 )
 
             todays_bars = {

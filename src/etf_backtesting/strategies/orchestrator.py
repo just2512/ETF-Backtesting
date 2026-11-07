@@ -10,7 +10,13 @@ from typing import Literal
 
 from etf_backtesting.contracts import PriceBar
 from etf_backtesting.engine.corporate_actions import ETFDividend
-from etf_backtesting.engine.execution import ExecutionEngine, OrderIntent, TradingCostModel
+from etf_backtesting.engine.execution import (
+    ExecutionEngine,
+    ExecutionMarketContext,
+    ExecutionModel,
+    OrderIntent,
+    TradingCostModel,
+)
 from etf_backtesting.engine.ledger import PortfolioLedger
 from etf_backtesting.engine.runner import BacktestRunResult, PortfolioBacktestRunner
 from etf_backtesting.indicators.bollinger import bollinger_bands
@@ -320,6 +326,8 @@ class StrategyBacktestRunner:
         dividend_status: GateStatus,
         execution_rules_status: GateStatus,
         index_exposure_status: GateStatus | None = None,
+        execution_model: ExecutionModel | None = None,
+        execution_contexts: Mapping[tuple[date, str], ExecutionMarketContext] | None = None,
         research_only: bool = False,
         contributions: Mapping[date, Decimal] | None = None,
         dividends: Sequence[ETFDividend] = (),
@@ -347,6 +355,17 @@ class StrategyBacktestRunner:
             )
         if initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
+        if not research_only:
+            if execution_model is None or not (
+                execution_model.require_market_context
+                and execution_model.require_quotes
+                and execution_model.require_limit_status
+            ):
+                raise ValueError(
+                    "formal runs require explicit quotes, price-limit, suspension, slippage, and impact model"
+                )
+            if execution_contexts is None:
+                raise ValueError("formal runs require dated execution market contexts")
         orchestrator = StrategySignalOrchestrator(
             strategy,
             lot_size=self.lot_size,
@@ -361,6 +380,7 @@ class StrategyBacktestRunner:
             ExecutionEngine(
                 lot_size=self.lot_size,
                 minimum_cash_reserve=minimum_reserve,
+                execution_model=execution_model,
             )
         ).run(
             bars_by_symbol,
@@ -371,7 +391,25 @@ class StrategyBacktestRunner:
             dividends=dividends,
             trading_days=trading_days,
             signal_generator=orchestrator,
+            execution_contexts=execution_contexts,
         )
+        if not research_only:
+            incomplete_context = [
+                item for item in execution.executions
+                if item.status in ("NO_FILL", "REJECTED")
+                and item.reason is not None
+                and (
+                    "missing" in item.reason
+                    or "unknown" in item.reason
+                    or "incomplete" in item.reason
+                    or "despite tradable" in item.reason
+                    or "conflicts" in item.reason
+                )
+            ]
+            if incomplete_context:
+                raise ValueError(
+                    "formal run encountered missing or unknown execution market context"
+                )
         return StrategyRunResult(
             strategy=strategy,
             execution=execution,
