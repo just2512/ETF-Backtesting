@@ -396,13 +396,14 @@ class StrategyBacktestRunner:
         if not research_only:
             incomplete_context = [
                 item for item in execution.executions
-                if item.status == "NO_FILL"
+                if item.status in ("NO_FILL", "REJECTED")
                 and item.reason is not None
                 and (
                     "missing" in item.reason
                     or "unknown" in item.reason
                     or "incomplete" in item.reason
                     or "despite tradable" in item.reason
+                    or "conflicts" in item.reason
                 )
             ]
             if incomplete_context:
