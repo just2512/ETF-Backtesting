@@ -141,8 +141,15 @@ class PortfolioBacktestRunner:
             # the explicit signal-priority order returned by CashPoolAllocator.
             for order in orders_by_date.get(day, []):
                 bar = indexed_bars.get(order.symbol, {}).get(day)
+                market_context = (
+                    execution_contexts.get((day, order.symbol))
+                    if execution_contexts is not None
+                    else None
+                )
                 executions.append(
-                    self.execution_engine.execute_next_open(order, bar, ledger, costs)
+                    self.execution_engine.execute_next_open(
+                        order, bar, ledger, costs, market_context
+                    )
                 )
 
             todays_bars = {
