@@ -56,6 +56,17 @@ $env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
 python scripts/probe_stock_sdk.py
 ```
 
+远程历史数据快照导出（仅访问在线 API，不读取本地 LevelDB）：
+
+```powershell
+$env:STOCKSDK_HOST = "106.75.217.246"
+$env:STOCKSDK_PORT = "7899"
+$env:STOCKSDK_ONLINE_ENDPOINT = "106.75.217.246:12328"
+python scripts/export_remote_history.py
+```
+
+默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
+
 ## 关键原则
 
 1. 信号计算与成交执行分离：收盘后生成信号，下一交易日按可成交价格执行。
