@@ -95,8 +95,14 @@ class StrategySignalOrchestrator:
         self.strategy = strategy
         self.dca_budget_by_symbol = dict(dca_budget_by_symbol or {})
         self.per_etf_cycle_budget = dict(per_etf_cycle_budget or {})
+        if any(value <= 0 for value in self.dca_budget_by_symbol.values()):
+            raise ValueError("all fixed DCA budgets must be positive")
+        if any(value <= 0 for value in self.per_etf_cycle_budget.values()):
+            raise ValueError("all ETF cycle budgets must be positive")
         self.dca_dates = set(dca_dates or ())
         self.max_market_value_by_symbol = dict(max_market_value_by_symbol or {})
+        if any(value <= 0 for value in self.max_market_value_by_symbol.values()):
+            raise ValueError("all ETF market-value caps must be positive")
         self.reserve_cash = reserve_cash
         self.sell_mode = sell_mode
         self.lot_size = lot_size
@@ -193,7 +199,9 @@ class StrategySignalOrchestrator:
             if percent_b is None:
                 continue
             signals = self._accumulation_signals(symbol, signal_date, percent_b)
-            base_budget = self.per_etf_cycle_budget[symbol]
+            if signals and symbol not in self.per_etf_cycle_budget:
+                raise ValueError(f"strategy {self.strategy} missing cycle budget for {symbol}")
+            base_budget = self.per_etf_cycle_budget.get(symbol, Decimal("0"))
             desired_cash = base_budget * sum(
                 (Decimal(str(item.budget_fraction)) for item in signals),
                 Decimal("0"),
@@ -315,6 +323,10 @@ class StrategyBacktestRunner:
         dividends: Sequence[ETFDividend] = (),
         **strategy_options: object,
     ) -> StrategyRunResult:
+        if strategy != "D" and len(bars_by_symbol) != 1:
+            raise ValueError(
+                "strategies A/B/C run one ETF per comparison; strategy D is the multi-ETF shared-pool run"
+            )
         if not research_only and (
             dividend_status != "PASS" or execution_rules_status != "PASS"
         ):
