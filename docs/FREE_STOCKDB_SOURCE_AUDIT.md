@@ -188,3 +188,14 @@ python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-0
 2. 覆盖表：每只ETF的官方来源及覆盖起止日期。
 
 五只ETF必须全部声明覆盖整个回测区间。没有事件记录但覆盖声明完整，才可表示该区间未发现分红；缺失覆盖声明一律 UNKNOWN。事件公告URL必须为白名单域名下的HTTPS地址，公告日期不能晚于除息日。两份CSV生成组合SHA-256，正式策略运行必须传入该哈希。当前未取得实际官方公告CSV，分红门禁仍 MISSING。
+
+
+## 对照公开 sdk_test.py 的K线调用
+
+已检查 `调用方式/python/sdk_test.py`：其批量历史日线示例调用 `rd.get_data(hs[:3], start="20260713", end="20260715", frequency="1d", fq="qfq")`，注释明确 `fq=None` 表示不复权；用户给出的远程启动示例另使用 `rd.get("日k", code, range)` 做毫秒级范围查询。
+
+适配器支持两种历史路径：
+- 如果运行时模块导出 `get_price`，优先调用该在线接口并传 `fq=None`。
+- 否则尝试 `rd.get_data(code=..., start=..., end=..., frequency="1d", fq=None, as_df=True)`。只有原生通道初始化成功时才调用；7899拒连时不将其伪装成12328在线行情。
+
+`scripts/probe_remote_sdk_contract.py` 现在会同时记录模块级函数签名和 `rd.get/rd.get_data` 签名。公开SDK源码与用户当前实际运行模块是否相同，仍以探测输出的 `sdk_module_file` 为准。

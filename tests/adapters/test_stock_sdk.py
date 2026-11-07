@@ -139,3 +139,78 @@ def test_native_connection_failure_does_not_block_online_reads():
     assert adapter.read_daily_bars("510300")
     with pytest.raises(ConnectionError, match="native StockDB initialization failed"):
         adapter.read_native_daily_range("510300", "20240102", "20240103")
+
+
+class FakeNativeRDWithData:
+    def __init__(self):
+        self.calls = []
+
+    def get_data(self, **kwargs):
+        self.calls.append(kwargs)
+        return [
+            {
+                "date": "2024-01-02",
+                "open": 3.0,
+                "high": 3.2,
+                "low": 2.9,
+                "close": 3.1,
+                "volume": 100,
+                "money": 310,
+            }
+        ]
+
+
+def test_rd_get_data_is_supported_as_unadjusted_history_fallback():
+    sdk = FakeSDK()
+    sdk.get_price = None
+    sdk.rd = FakeNativeRDWithData()
+    adapter = StockSDKAdapter(sdk, "127.0.0.1", 7899, "127.0.0.1:12328")
+
+    bars = adapter.read_daily_bars("510300", "20240101", "20240131")
+
+    assert adapter.history_api == "rd.get_data"
+    assert len(bars) == 1
+    assert bars[0].close == 3.1
+    assert bars[0].amount == 310
+    assert sdk.rd.calls == [{
+        "code": "510300",
+        "start": "20240101",
+        "end": "20240131",
+        "frequency": "1d",
+        "fq": None,
+        "as_df": True,
+    }]
+
+
+def test_rd_get_data_fallback_reports_native_init_failure_without_using_local_data():
+    sdk = FakeSDK()
+    sdk.get_price = None
+    sdk.rd = FakeNativeRDWithData()
+
+    def fail_native_init(host, port):
+        raise ConnectionRefusedError("native service refused")
+
+    sdk.init = fail_native_init
+    adapter = StockSDKAdapter(sdk, "106.75.217.246", 7899, "106.75.217.246:12328")
+
+    assert sdk.endpoint == "106.75.217.246:12328"
+    with pytest.raises(ConnectionError, match="native StockDB initialization failed"):
+        adapter.read_daily_bars("510300")
+
+
+def test_calendar_and_index_api_names_are_configurable(monkeypatch):
+    sdk, adapter = make_adapter()
+    sdk.custom_calendar = lambda **kwargs: ["2024-01-02"]
+    sdk.custom_index = lambda index_id, *, date: {
+        "index_id": index_id,
+        "date": date,
+        "constituents": [],
+    }
+    monkeypatch.setenv("STOCKSDK_TRADE_DAYS_API", "custom_calendar")
+    monkeypatch.setenv("STOCKSDK_INDEX_API", "custom_index")
+
+    assert adapter.read_trade_days("20240101", "20240103") == [date(2024, 1, 2)]
+    result = adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+    assert result["index_id"] == "000300.XSHG"
+    assert result["date"] == "2020-06-30"

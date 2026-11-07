@@ -114,6 +114,9 @@ def main() -> int:
     parser.add_argument("--date", default="2020-06-30")
     parser.add_argument("--calendar-start", default="2020-06-01")
     parser.add_argument("--calendar-end", default="2020-07-31")
+    parser.add_argument("--sample-symbol", default="510300")
+    parser.add_argument("--sample-start", default="2024-01-02")
+    parser.add_argument("--sample-end", default="2024-01-10")
     parser.add_argument("--output", default="reports/audit/remote_sdk_contract.json")
     args = parser.parse_args()
 
@@ -121,6 +124,8 @@ def main() -> int:
         snapshot_date = date.fromisoformat(args.date)
         calendar_start = date.fromisoformat(args.calendar_start).strftime("%Y%m%d")
         calendar_end = date.fromisoformat(args.calendar_end).strftime("%Y%m%d")
+        sample_start = date.fromisoformat(args.sample_start).strftime("%Y%m%d")
+        sample_end = date.fromisoformat(args.sample_end).strftime("%Y%m%d")
         module_name = os.getenv("STOCKSDK_MODULE", "stock_sdk")
         sdk = importlib.import_module(module_name)
         host = os.getenv("STOCKSDK_HOST")
@@ -139,6 +144,19 @@ def main() -> int:
             name: _signature(getattr(sdk, name, None))
             for name in functions
         }
+        rd = getattr(sdk, "rd", None)
+        rd_signatures = {
+            name: _signature(getattr(rd, name, None))
+            for name in ("get", "get_data")
+        }
+        module_callable_names = sorted(
+            name for name in dir(sdk)
+            if not name.startswith("_") and callable(getattr(sdk, name, None))
+        )
+        rd_callable_names = sorted(
+            name for name in dir(rd)
+            if not name.startswith("_") and callable(getattr(rd, name, None))
+        ) if rd is not None else []
 
         native_init_error = None
         native_init = getattr(sdk, "init", None)
@@ -160,7 +178,48 @@ def main() -> int:
         else:
             online_init_error = "MISSING: set_init() or STOCKSDK_ONLINE_ENDPOINT"
 
-        history_getter = getattr(sdk, "get_history_constituents", None)
+        daily_history_api = "get_price" if callable(getattr(sdk, "get_price", None)) else "rd.get_data"
+        try:
+            if online_init_error is not None:
+                raise ConnectionError(online_init_error)
+            online_price_getter = getattr(sdk, "get_price", None)
+            if callable(online_price_getter):
+                raw_daily = online_price_getter(
+                    args.sample_symbol,
+                    start_date=sample_start,
+                    end_date=sample_end,
+                    frequency="daily",
+                    fields=["open", "high", "low", "close", "volume", "money"],
+                    fq=None,
+                    panel=False,
+                )
+            elif callable(getattr(rd, "get_data", None)):
+                if native_init_error is not None:
+                    raise ConnectionError(
+                        "rd.get_data is the only history API but native init failed"
+                    )
+                raw_daily = rd.get_data(
+                    code=args.sample_symbol,
+                    start=sample_start,
+                    end=sample_end,
+                    frequency="1d",
+                    fq=None,
+                    as_df=True,
+                )
+            else:
+                raw_daily = None
+            daily_schema = _sample_payload(raw_daily)
+        except Exception as exc:
+            daily_schema = {
+                "status": "UNKNOWN",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "columns": [],
+                "sample_rows": [],
+            }
+
+        index_api_name = os.getenv("STOCKSDK_INDEX_API", "get_history_constituents")
+        history_getter = getattr(sdk, index_api_name, None)
         if callable(history_getter) and online_init_error is None:
             try:
                 raw_index = history_getter(args.index_id, date=snapshot_date.isoformat())
@@ -181,7 +240,8 @@ def main() -> int:
                 "sample_rows": [],
             }
 
-        calendar_getter = getattr(sdk, "get_trade_days", None)
+        calendar_api_name = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
+        calendar_getter = getattr(sdk, calendar_api_name, None)
         if callable(calendar_getter) and online_init_error is None:
             try:
                 trade_days = calendar_getter(
@@ -218,6 +278,7 @@ def main() -> int:
             "status": (
                 "PASS"
                 if online_init_error is None
+                and daily_schema["status"] == "PASS"
                 and index_schema["status"] == "PASS"
                 and calendar["status"] == "PASS"
                 else "UNKNOWN"
@@ -225,10 +286,23 @@ def main() -> int:
             "sdk_module": module_name,
             "sdk_module_file": getattr(sdk, "__file__", None),
             "sdk_signatures": signatures,
+            "rd_signatures": rd_signatures,
+            "module_callable_names": module_callable_names,
+            "rd_callable_names": rd_callable_names,
             "native_init_status": "PASS" if native_init_error is None else "UNKNOWN",
             "native_init_error": native_init_error,
             "online_init_status": "PASS" if online_init_error is None else "REJECT",
             "online_init_error": online_init_error,
+            "daily_history_sample": {
+                "symbol": args.sample_symbol,
+                "start": sample_start,
+                "end": sample_end,
+                "api": daily_history_api,
+                "price_basis": "UNADJUSTED_FQ_NONE",
+                "schema": daily_schema,
+            },
+            "configured_index_api": index_api_name,
+            "configured_calendar_api": calendar_api_name,
             "index_snapshot": {
                 "index_id": args.index_id,
                 "requested_date": snapshot_date.isoformat(),
