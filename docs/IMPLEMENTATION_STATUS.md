@@ -184,3 +184,10 @@
 - 适配器现优先使用用户此前实测的在线 `get_price(..., fq=None)`；当该函数不存在时，支持 `rd.get_data(..., fq=None, as_df=True)`。若仅有 `rd.get_data` 且 7899 原生初始化失败，会明确报错，不假装在线API可用。
 - SDK探测脚本同时记录模块级接口与 `rd.get/rd.get_data` 的真实签名。
 - 不复权参数在两条路径都显式设置为 `fq=None`，不沿用 sdk_test.py 示例中的 `qfq`。
+
+
+### 历史指数API名称按用户实测修正
+
+- 用户PR #22 的本机实测文档明确列出 `get_index_stocks` 与 `get_index_weights`，此前单一 `get_history_constituents` 假设不应作为默认。
+- 适配器现默认分别调用两个接口，并按证券代码合并；字段、单位仍显式输入。
+- 探测脚本输出两份接口各自的字段、样例和数值统计；`STOCKSDK_INDEX_API` 仅用于运行时确实存在的单一组合接口。
