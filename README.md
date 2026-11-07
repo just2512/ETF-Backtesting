@@ -25,6 +25,13 @@
 
 上述是研究候选池，不代表最终必须全部纳入。159611 与 561560 属于同指数产品备选，首轮只选其一；煤炭ETF暂不纳入核心池。产品代码、跟踪指数、上市日期、规模、流动性和费率均须在数据审计阶段重新核验。
 
+## 配置模板
+
+- [ETF候选池](config/etf_universe.yaml)
+- [数据源配置](config/data_sources.yaml)
+- [回测参数](config/backtest.yaml)
+- [交易费用模板](config/trading_costs.yaml)（待券商规则核实）
+
 ## 设计文档
 
 - [总体架构](docs/ARCHITECTURE.md)
