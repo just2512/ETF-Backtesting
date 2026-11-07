@@ -54,7 +54,9 @@ $env:STOCKSDK_HOST = "<init() 使用的主机>"
 $env:STOCKSDK_PORT = "7899"
 $env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
 # 只有当实际模块函数名不同时才覆盖以下默认值
-$env:STOCKSDK_INDEX_API = "get_history_constituents"
+$env:STOCKSDK_INDEX_API = ""
+$env:STOCKSDK_INDEX_STOCKS_API = "get_index_stocks"
+$env:STOCKSDK_INDEX_WEIGHTS_API = "get_index_weights"
 $env:STOCKSDK_TRADE_DAYS_API = "get_trade_days"
 python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-06-30
 ```
