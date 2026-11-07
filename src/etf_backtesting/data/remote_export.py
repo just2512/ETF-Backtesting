@@ -107,6 +107,8 @@ def export_snapshot(
             bars = sorted(bars, key=lambda bar: bar.trade_date)
             all_bars[symbol] = bars
             expected_first = expected_dates.get(symbol)
+            if expected_first is not None and requested_start > expected_first:
+                expected_first = None
             first_date_status = "NOT_CONFIGURED"
             if expected_first is not None:
                 if bars[0].trade_date == expected_first:
