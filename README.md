@@ -37,6 +37,7 @@
 - [总体架构](docs/ARCHITECTURE.md)
 - [数据契约](docs/DATA_CONTRACT.md)
 - [数据审计计划](docs/DATA_AUDIT_PLAN.md)
+- [外部历史数据源候选](docs/DATA_SOURCE_OPTIONS.md)
 - [指数重叠方法](docs/OVERLAP_METHODOLOGY.md)
 - [回测方法](docs/BACKTEST_METHODOLOGY.md)
 - [验收标准](docs/ACCEPTANCE_CRITERIA.md)
