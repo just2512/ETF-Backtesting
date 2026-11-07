@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any
 
 from etf_backtesting.contracts import PriceBar
+from etf_backtesting.data.audit import audit_daily_records
 
 
 class FreeStockDBAdapter:
@@ -87,8 +88,30 @@ class FreeStockDBAdapter:
     def probe_symbol(self, symbol: str) -> dict[str, object]:
         bars = self.read_daily_bars(symbol)
         factors = self.read_adjustment_factors(symbol)
+        raw_records = [
+            {
+                "date": bar.trade_date.strftime("%Y%m%d"),
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+                "volume": bar.volume,
+                "amount": bar.amount,
+            }
+            for bar in bars
+        ]
+        findings = audit_daily_records(symbol, raw_records)
         return {
             "symbol": symbol,
+            "data_quality_findings": [
+                {
+                    "status": finding.status.value,
+                    "check": finding.check,
+                    "message": finding.message,
+                    "evidence": finding.evidence,
+                }
+                for finding in findings
+            ],
             "daily_bar_status": "PASS" if bars else "MISSING",
             "daily_bar_count": len(bars),
             "first_date": bars[0].trade_date.isoformat() if bars else None,
