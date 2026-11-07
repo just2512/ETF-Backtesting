@@ -14,6 +14,7 @@ from datetime import date, datetime
 from typing import Any
 
 from etf_backtesting.contracts import PriceBar
+from etf_backtesting.data.audit import audit_daily_records, summarize_findings
 
 
 class StockSDKAdapter:
@@ -114,6 +115,56 @@ class StockSDKAdapter:
         if len(dates) != len(set(dates)):
             raise ValueError(f"duplicate daily bars returned for {symbol}")
         return bars
+
+    def probe_symbol(self, symbol: str) -> dict[str, object]:
+        """Summarize observed daily coverage without claiming calendar completeness."""
+        bars = self.read_daily_bars(symbol)
+        records = [
+            {
+                "date": bar.trade_date.strftime("%Y%m%d"),
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+                "volume": bar.volume,
+                "amount": bar.amount,
+            }
+            for bar in bars
+        ]
+        findings = audit_daily_records(symbol, records)
+        return {
+            "symbol": symbol,
+            "source": self.SOURCE_NAME,
+            "daily_bar_count": len(bars),
+            "first_date": bars[0].trade_date.isoformat() if bars else None,
+            "last_date": bars[-1].trade_date.isoformat() if bars else None,
+            "daily_bar_status": "PASS" if bars else "MISSING",
+            "data_quality": summarize_findings(findings),
+            "adjustment_factor_status": "UNKNOWN",
+            "corporate_action_status": "UNKNOWN",
+            "historical_index_constituent_status": "UNKNOWN",
+            "calendar_completeness": "UNKNOWN",
+        }
+
+    def probe_universe(self, symbols: list[str]) -> dict[str, object]:
+        """Probe each symbol independently; a failure for one symbol remains visible."""
+        results = []
+        for symbol in symbols:
+            try:
+                results.append(self.probe_symbol(symbol))
+            except Exception as exc:
+                results.append({
+                    "symbol": symbol,
+                    "source": self.SOURCE_NAME,
+                    "daily_bar_status": "UNKNOWN",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "adjustment_factor_status": "UNKNOWN",
+                    "corporate_action_status": "UNKNOWN",
+                    "historical_index_constituent_status": "UNKNOWN",
+                    "calendar_completeness": "UNKNOWN",
+                })
+        return {"source": self.SOURCE_NAME, "symbols": results}
 
     def read_native_daily_range(self, symbol: str, start: str, end: str) -> Any:
         """Expose the native rd.get range response without assuming its schema."""
