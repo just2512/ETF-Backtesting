@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Mapping
+
+from etf_backtesting.portfolio.exposure import max_allocation_under_industry_caps
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +16,15 @@ class BuySignal:
     desired_cash: Decimal
     current_market_value: Decimal
     max_market_value: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class IndustryExposureContext:
+    portfolio_value: Decimal
+    current_industry_values: Mapping[str, Decimal]
+    etf_constituent_weights: Mapping[str, Mapping[str, float]]
+    security_industries: Mapping[str, str]
+    industry_caps: Mapping[str, Decimal]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +41,7 @@ class CashPoolAllocator:
         available_cash: Decimal,
         reserve_cash: Decimal,
         signals: list[BuySignal],
+        industry_context: IndustryExposureContext | None = None,
     ) -> list[CashAllocation]:
         if available_cash < 0 or reserve_cash < 0:
             raise ValueError("cash values must not be negative")
@@ -44,10 +57,34 @@ class CashPoolAllocator:
 
         spendable = available_cash - reserve_cash
         allocations: list[CashAllocation] = []
+        current_industry_values = (
+            dict(industry_context.current_industry_values) if industry_context else {}
+        )
         for signal in sorted(signals, key=lambda item: (item.percent_b, item.symbol)):
             remaining_cap = signal.max_market_value - signal.current_market_value
             amount = min(signal.desired_cash, remaining_cap, spendable)
             reason = "ALLOCATED" if amount > 0 else "CAP_OR_CASH_LIMIT"
+            if amount > 0 and industry_context:
+                weights = industry_context.etf_constituent_weights.get(signal.symbol)
+                if weights is None:
+                    raise ValueError(f"missing constituent weights for {signal.symbol}")
+                allowed = max_allocation_under_industry_caps(
+                    amount,
+                    industry_context.portfolio_value,
+                    current_industry_values,
+                    weights,
+                    industry_context.security_industries,
+                    industry_context.industry_caps,
+                )
+                if allowed < amount:
+                    reason = "INDUSTRY_CAP_LIMIT"
+                amount = allowed
+                for security, weight in weights.items():
+                    industry = industry_context.security_industries[security]
+                    current_industry_values[industry] = (
+                        current_industry_values.get(industry, Decimal("0"))
+                        + amount * Decimal(str(weight))
+                    )
             allocations.append(CashAllocation(signal.symbol, signal.desired_cash, amount, reason))
             spendable -= amount
         return allocations
