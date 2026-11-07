@@ -124,3 +124,13 @@
 - `ExecutionEngine.minimum_cash_reserve` 在实际开盘价成交时再次检查最低现金储备，避免收盘时分配通过、次日跳空后突破储备线。
 - D策略执行顺序保留 `CashPoolAllocator` 的显式信号优先级，不再按证券代码重新排序。
 - 已新增测试覆盖预算超限拒单、最低现金储备保护、D策略开盘跳空后分配优先级与储备守恒。
+
+
+### 可复现报告与历史指数正式门禁
+
+- 新增 `etf_backtesting.reports.strategy_report`，输出 `report.json`、`equity_curve.csv`、`executions.csv`、`ledger_events.csv`。
+- 报告以数据快照 SHA-256、完整运行配置 SHA-256、策略标识生成确定性 run_id；记录信号/成交时序、现金流时点、价格口径、策略门禁、逐笔成交、账本事件、NAV和最大回撤。
+- 外部追加资金按 BEGINNING 时点剥离后计算单位净值；现金分红保留为投资现金流，不计作外部投入。
+- 报告拒绝缺少数据快照哈希或完整运行配置的调用，研究性结果明确标记 research_only。
+- D策略若启用行业/指数穿透约束，正式运行还必须显式提供历史指数暴露 PASS；不启用时将该项标为 NOT_APPLICABLE。不能将当前成分权重视作历史权重。
+- A/B/C/D均要求初始资金为正；资金、周期预算、单只上限、现金储备必须由调用方明确传入。
