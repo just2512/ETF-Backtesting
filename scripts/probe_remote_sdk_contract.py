@@ -218,7 +218,8 @@ def main() -> int:
                 "sample_rows": [],
             }
 
-        history_getter = getattr(sdk, "get_history_constituents", None)
+        index_api_name = os.getenv("STOCKSDK_INDEX_API", "get_history_constituents")
+        history_getter = getattr(sdk, index_api_name, None)
         if callable(history_getter) and online_init_error is None:
             try:
                 raw_index = history_getter(args.index_id, date=snapshot_date.isoformat())
@@ -239,7 +240,8 @@ def main() -> int:
                 "sample_rows": [],
             }
 
-        calendar_getter = getattr(sdk, "get_trade_days", None)
+        calendar_api_name = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
+        calendar_getter = getattr(sdk, calendar_api_name, None)
         if callable(calendar_getter) and online_init_error is None:
             try:
                 trade_days = calendar_getter(
@@ -299,6 +301,8 @@ def main() -> int:
                 "price_basis": "UNADJUSTED_FQ_NONE",
                 "schema": daily_schema,
             },
+            "configured_index_api": index_api_name,
+            "configured_calendar_api": calendar_api_name,
             "index_snapshot": {
                 "index_id": args.index_id,
                 "requested_date": snapshot_date.isoformat(),
