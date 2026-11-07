@@ -43,6 +43,7 @@ class OrderIntent:
     quantity: Decimal
     signal_date: date
     execution_date: date
+    cash_limit: Decimal | None = None
 
     def __post_init__(self) -> None:
         if not self.symbol:
@@ -53,6 +54,10 @@ class OrderIntent:
             raise ValueError("quantity must be positive")
         if self.execution_date <= self.signal_date:
             raise ValueError("execution date must be later than signal date")
+        if self.cash_limit is not None and self.cash_limit <= 0:
+            raise ValueError("cash_limit must be positive when provided")
+        if self.side == "SELL" and self.cash_limit is not None:
+            raise ValueError("cash_limit applies only to buy orders")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,10 +74,17 @@ class ExecutionResult:
 
 
 class ExecutionEngine:
-    def __init__(self, lot_size: int = 100) -> None:
+    def __init__(
+        self,
+        lot_size: int = 100,
+        minimum_cash_reserve: Decimal = Decimal("0"),
+    ) -> None:
         if lot_size < 1:
             raise ValueError("lot_size must be positive")
+        if minimum_cash_reserve < 0:
+            raise ValueError("minimum_cash_reserve must not be negative")
         self.lot_size = Decimal(lot_size)
+        self.minimum_cash_reserve = minimum_cash_reserve
 
     def execute_next_open(
         self,
@@ -94,8 +106,21 @@ class ExecutionEngine:
         notional = order.quantity * price
         fee = costs.calculate(notional)
         if order.side == "BUY":
-            if notional + fee > ledger.cash:
+            total_cost = notional + fee
+            if order.cash_limit is not None and total_cost > order.cash_limit:
+                return self._result(
+                    order,
+                    "REJECTED",
+                    reason="execution cost exceeds allocated cash budget",
+                )
+            if total_cost > ledger.cash:
                 return self._result(order, "REJECTED", reason="insufficient cash")
+            if ledger.cash - total_cost < self.minimum_cash_reserve:
+                return self._result(
+                    order,
+                    "REJECTED",
+                    reason="minimum cash reserve would be breached",
+                )
             ledger.buy(order.symbol, order.quantity, price, fee)
         else:
             if order.quantity > ledger.positions.get(order.symbol, Decimal("0")):
