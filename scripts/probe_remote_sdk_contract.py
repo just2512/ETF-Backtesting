@@ -62,8 +62,18 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         row_count = len(raw)
         sample_rows = list(raw[:5])
         first = raw[0] if raw else None
-        names = list(first) if isinstance(first, Mapping) else []
-        source_rows = sample_rows if names else []
+        if isinstance(first, Mapping):
+            names = list(first)
+            source_rows = sample_rows
+        elif first is not None and all(
+            isinstance(value, (str, int, float, Decimal)) for value in raw
+        ):
+            names = ["value"]
+            sample_rows = [{"value": value} for value in raw[:5]]
+            source_rows = [{"value": value} for value in raw]
+        else:
+            names = []
+            source_rows = []
         dtypes = {}
         index_name = None
         index_sample = []
