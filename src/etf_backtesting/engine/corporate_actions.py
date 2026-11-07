@@ -14,6 +14,9 @@ class ETFDividend:
     record_date: date
     pay_date: date
     cash_per_share: Decimal
+    announcement_date: date | None = None
+    source_name: str | None = None
+    source_url: str | None = None
 
     def __post_init__(self) -> None:
         if not self.symbol:
@@ -22,3 +25,12 @@ class ETFDividend:
             raise ValueError("dividend dates must satisfy ex_date <= record_date < pay_date")
         if self.cash_per_share < 0:
             raise ValueError("cash_per_share must not be negative")
+        provenance = (
+            self.announcement_date is not None,
+            self.source_name is not None,
+            self.source_url is not None,
+        )
+        if any(provenance) and not all(provenance):
+            raise ValueError("dividend provenance requires announcement_date, source_name, and source_url")
+        if self.announcement_date is not None and self.announcement_date > self.ex_date:
+            raise ValueError("dividend announcement must not postdate the ex-date")
