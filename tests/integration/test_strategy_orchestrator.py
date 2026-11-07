@@ -137,12 +137,13 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
 
     executions = result.execution.executions
     assert [item.symbol for item in executions] == ["510300", "159928"]
-    assert [item.status for item in executions] == ["REJECTED", "FILLED"]
-    assert "allocated cash budget" in (executions[0].reason or "")
-    assert result.execution.ledger.cash == Decimal("9600")
+    assert [item.status for item in executions] == ["PARTIAL", "FILLED"]
+    assert executions[0].quantity == Decimal("300")
+    assert executions[0].requested_quantity == Decimal("800")
+    assert result.execution.ledger.cash == Decimal("6600")
+    assert result.execution.ledger.positions["510300"] == Decimal("300")
     assert result.execution.ledger.positions["159928"] == Decimal("100")
     assert result.index_exposure_gate == "NOT_APPLICABLE"
-    assert result.execution.ledger.positions.get("510300", Decimal("0")) == 0
 
 
 def test_formal_strategy_run_fails_closed_on_missing_dividends_or_execution_rules() -> None:
