@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from etf_backtesting.contracts import PriceBar
-from scripts.export_remote_history import export_snapshot
+from etf_backtesting.data.remote_export import export_snapshot
 
 
 class FakeRemoteAdapter:
