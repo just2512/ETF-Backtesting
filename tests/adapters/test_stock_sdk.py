@@ -93,3 +93,31 @@ def test_malformed_daily_record_is_rejected():
     sdk.rd.rows = [{"date": "2024-01-02", "open": 3.8, "high": 3.9, "low": 3.7}]
     with pytest.raises(ValueError, match="missing OHLC"):
         adapter.read_daily_bars("510300")
+
+
+
+def test_probe_reports_observed_coverage_and_unknown_calendar():
+    _, adapter = make_adapter()
+    report = adapter.probe_symbol("510300")
+    assert report["daily_bar_count"] == 2
+    assert report["first_date"] == "2024-01-02"
+    assert report["last_date"] == "2024-01-03"
+    assert report["calendar_completeness"] == "UNKNOWN"
+    assert report["adjustment_factor_status"] == "UNKNOWN"
+    assert report["data_quality"]["overall_status"] == "UNKNOWN"
+
+
+def test_universe_probe_keeps_per_symbol_connection_failures_visible():
+    sdk, adapter = make_adapter()
+    original = sdk.rd.get_data
+
+    def get_data(**kwargs):
+        if kwargs["code"] == "BAD":
+            raise ConnectionError("service unavailable")
+        return original(**kwargs)
+
+    sdk.rd.get_data = get_data
+    report = adapter.probe_universe(["510300", "BAD"])
+    assert report["symbols"][0]["daily_bar_status"] == "PASS"
+    assert report["symbols"][1]["daily_bar_status"] == "UNKNOWN"
+    assert report["symbols"][1]["error_type"] == "ConnectionError"
