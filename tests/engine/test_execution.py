@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from etf_backtesting.contracts import PriceBar
 from etf_backtesting.engine.execution import ExecutionEngine, OrderIntent, TradingCostModel
 from etf_backtesting.engine.ledger import PortfolioLedger
