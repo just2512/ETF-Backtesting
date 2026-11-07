@@ -49,7 +49,11 @@ def build_strategy_report(
     drawdown = maximum_drawdown(nav_values)
 
     events = execution.ledger.events
-    filled = [item for item in execution.executions if item.status == "FILLED"]
+    filled = [
+        item for item in execution.executions
+        if item.status in ("FILLED", "PARTIAL")
+    ]
+    partial = [item for item in execution.executions if item.status == "PARTIAL"]
     rejected = [item for item in execution.executions if item.status == "REJECTED"]
     no_fill = [item for item in execution.executions if item.status == "NO_FILL"]
     total_contributions = sum(
@@ -114,6 +118,7 @@ def build_strategy_report(
             "fees": _decimal_text(total_fees),
             "turnover": _decimal_text(total_turnover),
             "filled_orders": len(filled),
+            "partial_orders": len(partial),
             "rejected_orders": len(rejected),
             "no_fill_orders": len(no_fill),
             "stale_valuation_sessions": sum(bool(item.stale_symbols) for item in snapshots),
@@ -138,6 +143,7 @@ def build_strategy_report(
                 "signal_date": item.signal_date.isoformat() if item.signal_date else None,
                 "execution_date": item.execution_date.isoformat(),
                 "quantity": _decimal_text(item.quantity),
+                "requested_quantity": _decimal_text(item.requested_quantity),
                 "fill_price": _decimal_text(item.fill_price),
                 "notional": _decimal_text(item.notional),
                 "fee": _decimal_text(item.fee),
@@ -204,7 +210,7 @@ def write_strategy_report(
             report["executions"],
             (
                 "status", "symbol", "side", "signal_date", "execution_date",
-                "quantity", "fill_price", "notional", "fee", "reason",
+                "quantity", "requested_quantity", "fill_price", "notional", "fee", "reason",
             ),
         ),
         "ledger": _csv_text(
