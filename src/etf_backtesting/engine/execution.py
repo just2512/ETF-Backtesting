@@ -71,6 +71,7 @@ class ExecutionResult:
     notional: Decimal
     fee: Decimal
     reason: str | None = None
+    signal_date: date | None = None
 
 
 class ExecutionEngine:
@@ -130,6 +131,7 @@ class ExecutionEngine:
         return ExecutionResult(
             "FILLED", order.symbol, order.side, order.execution_date,
             order.quantity, price, notional, fee,
+            signal_date=order.signal_date,
         )
 
     @staticmethod
@@ -141,4 +143,5 @@ class ExecutionEngine:
         return ExecutionResult(
             status, order.symbol, order.side, order.execution_date,
             Decimal("0"), None, Decimal("0"), Decimal("0"), reason,
+            signal_date=order.signal_date,
         )
