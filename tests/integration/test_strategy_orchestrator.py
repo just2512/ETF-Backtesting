@@ -61,7 +61,7 @@ def test_strategy_a_fixed_dca_executes_only_on_next_session() -> None:
 def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "B",
-        {"510300": bars("510300", [10, 8, 4, 4, 4])},
+        {"510300": bars("510300", [10, 10, 4, 4, 4])},
         DAYS,
         initial_cash=Decimal("10000"),
         costs=free_costs(),
@@ -69,7 +69,8 @@ def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
         execution_rules_status="UNKNOWN",
         research_only=True,
         per_etf_cycle_budget={"510300": Decimal("10000")},
-        bollinger_period=2,
+        bollinger_period=3,
+        bollinger_deviations=1.0,
     )
 
     filled = [item for item in result.execution.executions if item.status == "FILLED"]
@@ -82,16 +83,17 @@ def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
 def test_strategy_c_s1_sell_is_based_on_position_at_signal_close() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "C",
-        {"510300": bars("510300", [10, 8, 4, 8, 8])},
+        {"510300": bars("510300", [10, 10, 4, 13, 13])},
         DAYS,
         initial_cash=Decimal("10000"),
         costs=free_costs(),
         dividend_status="UNKNOWN",
         execution_rules_status="UNKNOWN",
         research_only=True,
-        per_etf_cycle_budget={"510300": Decimal("10000")},
+        per_etf_cycle_budget={"510300": Decimal("5000")},
         sell_mode="S1",
-        bollinger_period=2,
+        bollinger_period=3,
+        bollinger_deviations=1.0,
     )
 
     filled = [item for item in result.execution.executions if item.status == "FILLED"]
@@ -107,8 +109,8 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "D",
         {
-            "510300": bars("510300", [10, 8, 4, 4, 4]),
-            "159928": bars("159928", [10, 8, 4, 4, 4]),
+            "510300": bars("510300", [10, 10, 4, 4, 4]),
+            "159928": bars("159928", [10, 10, 4, 4, 4]),
         },
         DAYS,
         initial_cash=Decimal("2500"),
@@ -125,7 +127,8 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
             "159928": Decimal("100000"),
         },
         reserve_cash=Decimal("500"),
-        bollinger_period=2,
+        bollinger_period=3,
+        bollinger_deviations=1.0,
     )
 
     filled = [item for item in result.execution.executions if item.status == "FILLED"]
@@ -155,8 +158,8 @@ def test_A_B_C_reject_multi_etf_runs_to_avoid_implicit_priority() -> None:
         StrategyBacktestRunner().run(
             "B",
             {
-                "510300": bars("510300", [10, 8, 4, 4, 4]),
-                "159928": bars("159928", [10, 8, 4, 4, 4]),
+                "510300": bars("510300", [10, 10, 4, 4, 4]),
+                "159928": bars("159928", [10, 10, 4, 4, 4]),
             },
             DAYS,
             initial_cash=Decimal("10000"),
