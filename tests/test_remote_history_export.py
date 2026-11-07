@@ -7,6 +7,7 @@ from etf_backtesting.data.remote_export import export_snapshot
 
 class FakeRemoteAdapter:
     history_api = "get_price"
+
     def read_daily_bars(self, symbol: str, start: str, end: str):
         if symbol == "BAD":
             raise ConnectionError("online API unavailable")
@@ -49,7 +50,14 @@ def test_remote_export_writes_hashed_unadjusted_snapshot(tmp_path: Path) -> None
 
 
 def test_remote_export_keeps_other_symbols_when_one_symbol_fails(tmp_path: Path) -> None:
-    manifest = export_snapshot(FakeRemoteAdapter(), ["510300", "BAD"], tmp_path)
+    manifest = export_snapshot(
+        FakeRemoteAdapter(),
+        ["510300", "BAD"],
+        tmp_path,
+        start="20240102",
+        end="20240104",
+        expected_first_dates={"510300": date(2024, 1, 2)},
+    )
 
     good, bad = manifest["symbols"]
     assert good["status"] == "PASS"
@@ -64,7 +72,14 @@ def test_empty_online_calendar_never_passes_completeness(tmp_path: Path) -> None
         def read_trade_days(self, start: str, end: str):
             return []
 
-    manifest = export_snapshot(EmptyCalendarAdapter(), ["510300"], tmp_path)
+    manifest = export_snapshot(
+        EmptyCalendarAdapter(),
+        ["510300"],
+        tmp_path,
+        start="20240102",
+        end="20240104",
+        expected_first_dates={"510300": date(2024, 1, 2)},
+    )
 
     assert manifest["calendar_status"] == "UNKNOWN"
     assert manifest["symbols"][0]["calendar_completeness"] == "UNKNOWN"
@@ -76,7 +91,14 @@ def test_calendar_service_failure_does_not_discard_downloaded_bars(tmp_path: Pat
         def read_trade_days(self, start: str, end: str):
             raise TimeoutError("calendar timeout")
 
-    manifest = export_snapshot(BrokenCalendarAdapter(), ["510300"], tmp_path)
+    manifest = export_snapshot(
+        BrokenCalendarAdapter(),
+        ["510300"],
+        tmp_path,
+        start="20240102",
+        end="20240104",
+        expected_first_dates={"510300": date(2024, 1, 2)},
+    )
 
     assert manifest["symbols"][0]["status"] == "PASS"
     assert manifest["symbols"][0]["calendar_completeness"] == "UNKNOWN"
