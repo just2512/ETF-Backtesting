@@ -86,4 +86,4 @@ python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30
 
 ## 项目状态
 
-设计基线与四条首轮工作线已合并到 `main`。当前已实现数据适配/审计基础、指数重叠计算、布林指标和现金账本基础；真实本地数据覆盖、分红、历史指数成分、成交引擎、公共资金池及完整策略仍在实施。详见 [实施状态](docs/IMPLEMENTATION_STATUS.md) 和 [free-stockdb静态审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
+设计基线与四条首轮工作线已合并到 `main`。当前已实现远程在线行情接入、历史数据快照导出、严格历史指数权重导入器、A/B/C/D策略信号编排和共享执行/账本引擎。真实五只ETF快照、指数权重字段/单位、分红事件及完整成交规则仍未验收；正式策略比较仍被这些门禁阻断。详见 [实施状态](docs/IMPLEMENTATION_STATUS.md) 和 [free-stockdb静态审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
