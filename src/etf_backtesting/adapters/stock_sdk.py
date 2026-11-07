@@ -31,8 +31,13 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose init(host, port)")
         if not callable(getattr(sdk, "set_init", None)):
             raise TypeError("stock_sdk module must expose set_init(endpoint)")
-        if not callable(getattr(sdk, "get_price", None)):
-            raise TypeError("stock_sdk module must expose online get_price()")
+        rd = getattr(sdk, "rd", None)
+        has_online_get_price = callable(getattr(sdk, "get_price", None))
+        has_native_get_data = callable(getattr(rd, "get_data", None))
+        if not has_online_get_price and not has_native_get_data:
+            raise TypeError(
+                "stock_sdk must expose get_price() or rd.get_data() for historical daily bars"
+            )
         if not host or not online_endpoint or port < 1 or port > 65535:
             raise ValueError("valid host, port, and online_endpoint are required")
 
@@ -41,6 +46,9 @@ class StockSDKAdapter:
         self.port = port
         self.online_endpoint = online_endpoint
         self.native_init_error: Exception | None = None
+        self.history_api = (
+            "get_price" if has_online_get_price else "rd.get_data"
+        )
 
         # The native StockDB port and online API are separate services. A
         # refused native connection must not short-circuit online initialization.
@@ -99,15 +107,33 @@ class StockSDKAdapter:
         if start is not None and end is not None and start > end:
             raise ValueError("start must not be later than end")
 
-        records = self.sdk.get_price(
-            symbol,
-            start_date=start,
-            end_date=end,
-            frequency="daily",
-            fields=["open", "high", "low", "close", "volume", "money"],
-            fq=None,
-            panel=False,
-        )
+        if callable(getattr(self.sdk, "get_price", None)):
+            records = self.sdk.get_price(
+                symbol,
+                start_date=start,
+                end_date=end,
+                frequency="daily",
+                fields=["open", "high", "low", "close", "volume", "money"],
+                fq=None,
+                panel=False,
+            )
+        else:
+            if self.native_init_error is not None:
+                raise ConnectionError(
+                    "rd.get_data is the only historical API but native StockDB initialization failed"
+                ) from self.native_init_error
+            rd = getattr(self.sdk, "rd", None)
+            getter = getattr(rd, "get_data", None)
+            if not callable(getter):
+                raise TypeError("stock_sdk.rd must expose get_data()")
+            records = getter(
+                code=symbol,
+                start=start,
+                end=end,
+                frequency="1d",
+                fq=None,
+                as_df=True,
+            )
         normalized = self._records_from_result(records)
         bars = [self._to_price_bar(symbol, row) for row in normalized]
         bars.sort(key=lambda bar: bar.trade_date)
@@ -202,6 +228,7 @@ class StockSDKAdapter:
         return {
             "symbol": symbol,
             "source": self.SOURCE_NAME,
+            "history_api": self.history_api,
             "price_basis": "UNADJUSTED_FQ_NONE",
             "daily_bar_count": len(bars),
             "first_date": bars[0].trade_date.isoformat() if bars else None,
