@@ -48,7 +48,7 @@
 
 统一运行滚动区间、参数敏感性、市场阶段和成本压力测试，生成可复现报告。
 
-## 3. 建议分支策略
+## 3. 四条工作线与目录所有权\n\n具体目录所有权、冻结接口和各线验收见 [BRANCH_OWNERSHIP.md](BRANCH_OWNERSHIP.md)。首轮只创建四条工作线：\n\n- `work/data-adapter`\n- `work/data-audit`\n- `work/index-overlap`\n- `work/backtest-engine`\n\n策略A/B/C/D暂时作为 `work/backtest-engine` 内的独立模块并行实现，不再额外拆分分支。\n\n## 3. 建议分支策略
 
 采用短期功能分支，不长期维护多条主线：
 
