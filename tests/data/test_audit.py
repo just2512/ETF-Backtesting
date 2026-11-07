@@ -10,7 +10,7 @@ def test_valid_daily_records_pass_basic_checks() -> None:
     findings = audit_daily_records("510300", [
         {"date": "20240102", "open": 3.8, "high": 3.9, "low": 3.7, "close": 3.85,
          "volume": 100, "amount": 385}
-    ])
+    ], ["20240102"])
     assert all(item.status == AuditStatus.PASS for item in findings)
 
 
