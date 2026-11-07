@@ -93,3 +93,8 @@ python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30
 ## 项目状态
 
 设计基线与四条首轮工作线已合并到 `main`。当前已实现远程在线行情接入、历史数据快照导出、严格历史指数权重导入器、A/B/C/D策略信号编排和共享执行/账本引擎。真实五只ETF快照、指数权重字段/单位、分红事件及完整成交规则仍未验收；正式策略比较仍被这些门禁阻断。详见 [实施状态](docs/IMPLEMENTATION_STATUS.md) 和 [free-stockdb静态审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
+
+
+### 执行约束配置
+
+正式成交需要逐证券逐交易日的 `ExecutionMarketContext`（bid/ask、涨跌停价、停牌及封板状态）和显式 `ExecutionModel`（滑点、价格冲击、价差上限）。配置模板位于 `config/execution_model.yaml`，未取得历史报价和规则数据前保持 null，不允许用零滑点或 OHLC 开盘价冒充真实成交约束。次日跳空超过分配预算时会按整手部分成交，现金储备在实际成交价再次检查。
