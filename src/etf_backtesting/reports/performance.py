@@ -35,7 +35,7 @@ def unitized_nav(
         raise ValueError("initial account value must be positive")
     nav = [Decimal("1")]
     for previous, current, flow in zip(
-        account_values, account_values[1:], end_of_period_external_flows[1:], strict=True
+        account_values[:-1], account_values[1:], end_of_period_external_flows[1:], strict=True
     ):
         pre_flow_value = current - flow
         if previous <= 0 or pre_flow_value <= 0:
