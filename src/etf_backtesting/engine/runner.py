@@ -1,4 +1,4 @@
-"""Event-driven portfolio runner for pre-generated, causally dated orders."""
+"""Event-driven portfolio runner with pre-generated and close-generated orders."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ SignalGenerator = Callable[
 
 
 class PortfolioBacktestRunner:
-    """Execute pre-generated orders at their specified next-session open."""
+    """Execute orders at next-session open and optionally generate new close signals."""
 
     def __init__(self, execution_engine: ExecutionEngine | None = None) -> None:
         self.execution_engine = execution_engine or ExecutionEngine()
@@ -130,10 +130,9 @@ class PortfolioBacktestRunner:
             elif contribution < 0:
                 raise ValueError("negative contributions are not supported; model withdrawals explicitly")
 
-            for order in sorted(
-                orders_by_date.get(day, []),
-                key=lambda item: (item.signal_date, item.symbol, item.side),
-            ):
+            # Preserve caller/allocation order. In the shared-cash strategy this is
+            # the explicit signal-priority order returned by CashPoolAllocator.
+            for order in orders_by_date.get(day, []):
                 bar = indexed_bars.get(order.symbol, {}).get(day)
                 executions.append(
                     self.execution_engine.execute_next_open(order, bar, ledger, costs)
