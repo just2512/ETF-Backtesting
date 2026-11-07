@@ -16,6 +16,7 @@ REQUIRED_OHLC = ("open", "high", "low", "close")
 def audit_daily_records(
     symbol: str,
     records: Iterable[Mapping[str, Any]],
+    expected_trade_dates: Iterable[str] | None = None,
 ) -> list[AuditFinding]:
     rows = list(records)
     if not rows:
@@ -105,6 +106,30 @@ def audit_daily_records(
         findings.append(AuditFinding(
             AuditStatus.PASS, "required_ohlc_fields", "All OHLC fields are present.", symbol,
         ))
+
+
+    if expected_trade_dates is None:
+        findings.append(AuditFinding(
+            AuditStatus.UNKNOWN, "trade_date_completeness",
+            "No authoritative exchange trading calendar was supplied; gaps cannot be classified.",
+            symbol,
+        ))
+    else:
+        expected = set(expected_trade_dates)
+        observed = set(dates)
+        missing_dates = sorted(expected - observed)
+        if missing_dates:
+            findings.append(AuditFinding(
+                AuditStatus.REJECT, "trade_date_completeness",
+                "Expected trading dates are absent from the returned daily bars.",
+                symbol, {"missing_dates": missing_dates},
+            ))
+        else:
+            findings.append(AuditFinding(
+                AuditStatus.PASS, "trade_date_completeness",
+                "All supplied expected trading dates are present.", symbol,
+                {"expected_date_count": len(expected)},
+            ))
 
     findings.append(AuditFinding(
         AuditStatus.PASS, "coverage_observed",
