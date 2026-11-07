@@ -161,3 +161,20 @@ python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30
 ```
 
 `weight-scale` 只能显式选 `fraction` 或 `percent`。导出 manifest 保存查询日期、字段映射、单位、权重合计、证券数量和 SHA-256；单个日期失败不会抹掉其他成功日期。
+
+
+## 精确远程 SDK 契约探测
+
+公开的 `just2512/free-stockdb/pybao/stock_sdk.py` 当前是 class-based `StockDBClient` 接口，文件顶部导入 `stockdb.init/rd`，没有定义用户 `sdk_test.py` 示例中的模块级 `set_init/get_price/get_fundamentals/get_last_tick`。因此不能把该公开文件直接当作用户运行环境中实际使用的模块，也不能在 GitHub Actions 中擅自用它替代。
+
+新增 `scripts/probe_remote_sdk_contract.py`，在配置了用户实际 `./pybao/` 的 Python 环境中运行：
+
+```powershell
+$env:PYTHONPATH = ".\\pybao;$env:PYTHONPATH"
+$env:STOCKSDK_HOST = "106.75.217.246"
+$env:STOCKSDK_PORT = "7899"
+$env:STOCKSDK_ONLINE_ENDPOINT = "106.75.217.246:12328"
+python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-06-30
+```
+
+探测文件 `reports/audit/remote_sdk_contract.json` 会记录真实导入模块路径、函数签名、历史指数返回的字段名/数据类型/样例行、数值列范围/合计及交易日历样本。它不会根据列名猜权重单位，也不会把当前成分当作历史成分。只有拿到该原始输出，才能把 `--symbol-field`、`--weight-field` 和 `--weight-scale` 填入 `scripts/export_index_history.py` 并生成可审计快照。
