@@ -214,3 +214,23 @@ def test_calendar_and_index_api_names_are_configurable(monkeypatch):
 
     assert result["index_id"] == "000300.XSHG"
     assert result["date"] == "2020-06-30"
+
+
+def test_separate_historical_index_stocks_and_weights_endpoints(monkeypatch):
+    sdk, adapter = make_adapter()
+    sdk.get_index_stocks = lambda index_id, *, date: ["600000.XSHG", "000001.XSHE"]
+    sdk.get_index_weights = lambda index_id, *, date: {
+        "600000.XSHG": "0.4",
+        "000001.XSHE": "0.6",
+    }
+    monkeypatch.delenv("STOCKSDK_INDEX_API", raising=False)
+
+    result = adapter.read_history_constituents(
+        "000300.XSHG", date(2020, 6, 30)
+    )
+
+    assert result["stocks"] == ["600000.XSHG", "000001.XSHE"]
+    assert result["weights"] == {
+        "600000.XSHG": "0.4",
+        "000001.XSHE": "0.6",
+    }

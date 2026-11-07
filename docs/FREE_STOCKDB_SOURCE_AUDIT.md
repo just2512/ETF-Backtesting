@@ -199,3 +199,21 @@ python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-0
 - 否则尝试 `rd.get_data(code=..., start=..., end=..., frequency="1d", fq=None, as_df=True)`。只有原生通道初始化成功时才调用；7899拒连时不将其伪装成12328在线行情。
 
 `scripts/probe_remote_sdk_contract.py` 现在会同时记录模块级函数签名和 `rd.get/rd.get_data` 签名。公开SDK源码与用户当前实际运行模块是否相同，仍以探测输出的 `sdk_module_file` 为准。
+
+
+## 历史指数双接口调用路径修正
+
+PR #22 的本机实测记录明确给出了实际历史接口名：`get_index_stocks` 与 `get_index_weights`，两者都需要指数交易所后缀及 `date` 参数。之前代码只假设单一 `get_history_constituents`，与该实测记录不一致。
+
+现已修正：
+- 默认分别调用 `get_index_stocks(index_id, date=...)` 和 `get_index_weights(index_id, date=...)`。
+- 将股票代码列表与权重记录按证券代码严格合并；重复代码、缺失权重、额外权重均 REJECT。
+- 若运行时确实提供单一组合接口，可通过 `STOCKSDK_INDEX_API` 显式指定。
+- `scripts/probe_remote_sdk_contract.py` 同时探测两个接口的原始结构；权重字段与单位仍需根据实际返回样本显式指定。
+
+
+## 远程在线行情调用约束补充（来自 PR #22 本机实测）
+
+- `get_bars(count=9000)` 可取到五只ETF上市以来的全史，但默认复权价；不得把它作为成交价格来源。
+- `get_price(fq=None)` 是当前确认的不复权成交价接口。供应商对多代码批量请求有限制，单次请求应只传一个证券代码；五只ETF导出器按代码逐只拉取，不合并成批量调用。
+- 远程全史导出不使用 `get_bars` 默认值，也不使用复权价差推断现金分红。

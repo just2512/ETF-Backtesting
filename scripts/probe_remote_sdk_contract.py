@@ -62,8 +62,18 @@ def _sample_payload(raw: Any) -> dict[str, object]:
         row_count = len(raw)
         sample_rows = list(raw[:5])
         first = raw[0] if raw else None
-        names = list(first) if isinstance(first, Mapping) else []
-        source_rows = sample_rows if names else []
+        if isinstance(first, Mapping):
+            names = list(first)
+            source_rows = sample_rows
+        elif first is not None and all(
+            isinstance(value, (str, int, float, Decimal)) for value in raw
+        ):
+            names = ["value"]
+            sample_rows = [{"value": value} for value in raw[:5]]
+            source_rows = [{"value": value} for value in raw]
+        else:
+            names = []
+            source_rows = []
         dtypes = {}
         index_name = None
         index_sample = []
@@ -137,6 +147,8 @@ def main() -> int:
             "get_price",
             "get_trade_days",
             "get_history_constituents",
+            "get_index_stocks",
+            "get_index_weights",
             "get_fundamentals",
             "get_last_tick",
         )
@@ -218,26 +230,71 @@ def main() -> int:
                 "sample_rows": [],
             }
 
-        index_api_name = os.getenv("STOCKSDK_INDEX_API", "get_history_constituents")
-        history_getter = getattr(sdk, index_api_name, None)
-        if callable(history_getter) and online_init_error is None:
+        index_api_name = os.getenv("STOCKSDK_INDEX_API", "").strip()
+        stocks_api_name = os.getenv("STOCKSDK_INDEX_STOCKS_API", "get_index_stocks")
+        weights_api_name = os.getenv("STOCKSDK_INDEX_WEIGHTS_API", "get_index_weights")
+        if online_init_error is None:
             try:
-                raw_index = history_getter(args.index_id, date=snapshot_date.isoformat())
-                index_schema = _sample_payload(raw_index)
+                if index_api_name:
+                    index_getter = getattr(sdk, index_api_name, None)
+                    if not callable(index_getter):
+                        raise TypeError(f"configured index API {index_api_name} is missing")
+                    raw_index = index_getter(args.index_id, date=snapshot_date.isoformat())
+                    index_schema = {
+                        "status": _sample_payload(raw_index)["status"],
+                        "api_mode": "combined",
+                        "combined": _sample_payload(raw_index),
+                    }
+                else:
+                    stocks_getter = getattr(sdk, stocks_api_name, None)
+                    weights_getter = getattr(sdk, weights_api_name, None)
+                    if callable(stocks_getter) and callable(weights_getter):
+                        raw_stocks = stocks_getter(
+                            args.index_id, date=snapshot_date.isoformat()
+                        )
+                        raw_weights = weights_getter(
+                            args.index_id, date=snapshot_date.isoformat()
+                        )
+                        stocks_schema = _sample_payload(raw_stocks)
+                        weights_schema = _sample_payload(raw_weights)
+                        index_schema = {
+                            "status": (
+                                "PASS"
+                                if stocks_schema["status"] == "PASS"
+                                and weights_schema["status"] == "PASS"
+                                else "UNKNOWN"
+                            ),
+                            "api_mode": "separate",
+                            "stocks_api": stocks_api_name,
+                            "weights_api": weights_api_name,
+                            "stocks": stocks_schema,
+                            "weights": weights_schema,
+                        }
+                    else:
+                        fallback_getter = getattr(sdk, "get_history_constituents", None)
+                        if not callable(fallback_getter):
+                            raise TypeError(
+                                "neither separate index APIs nor get_history_constituents() are available"
+                            )
+                        raw_index = fallback_getter(
+                            args.index_id, date=snapshot_date.isoformat()
+                        )
+                        combined_schema = _sample_payload(raw_index)
+                        index_schema = {
+                            "status": combined_schema["status"],
+                            "api_mode": "combined_fallback",
+                            "combined": combined_schema,
+                        }
             except Exception as exc:
                 index_schema = {
                     "status": "UNKNOWN",
                     "error_type": type(exc).__name__,
                     "error": str(exc),
-                    "columns": [],
-                    "sample_rows": [],
                 }
         else:
             index_schema = {
                 "status": "MISSING",
-                "error": "get_history_constituents() or online initialization unavailable",
-                "columns": [],
-                "sample_rows": [],
+                "error": "online initialization unavailable",
             }
 
         calendar_api_name = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
@@ -301,7 +358,9 @@ def main() -> int:
                 "price_basis": "UNADJUSTED_FQ_NONE",
                 "schema": daily_schema,
             },
-            "configured_index_api": index_api_name,
+            "configured_index_api": index_api_name or None,
+            "configured_index_stocks_api": stocks_api_name,
+            "configured_index_weights_api": weights_api_name,
             "configured_calendar_api": calendar_api_name,
             "index_snapshot": {
                 "index_id": args.index_id,
