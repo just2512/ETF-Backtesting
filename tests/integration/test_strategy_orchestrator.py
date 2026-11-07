@@ -260,3 +260,19 @@ def test_formal_strategy_run_uses_dated_quotes_and_limit_context() -> None:
     assert result.research_only is False
     assert result.execution.executions[0].status == "FILLED"
     assert result.execution.executions[0].fill_price == Decimal("10")
+
+
+def test_dividend_pass_requires_official_snapshot_hash() -> None:
+    with pytest.raises(ValueError, match="official dividend snapshot SHA-256"):
+        StrategyBacktestRunner().run(
+            "A",
+            {"510300": bars("510300", [10, 10, 10, 10, 10])},
+            DAYS,
+            initial_cash=Decimal("10000"),
+            costs=free_costs(),
+            dividend_status="PASS",
+            execution_rules_status="PASS",
+            research_only=True,
+            dca_budget_by_symbol={"510300": Decimal("1000")},
+            dca_dates=set(),
+        )
