@@ -80,3 +80,96 @@ def test_buy_cannot_breach_configured_minimum_cash_reserve() -> None:
     assert result.reason == "minimum cash reserve would be breached"
     assert ledger.cash == Decimal("5000")
     assert ledger.positions == {}
+
+
+def test_buy_uses_ask_and_applies_slippage_and_market_impact() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("5000"))
+    order = OrderIntent(
+        "510300", "BUY", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar("510300", date(2024, 1, 3), 10, 10.2, 9.8, 10)
+    context = ExecutionMarketContext(
+        bid=Decimal("9.99"),
+        ask=Decimal("10.01"),
+        limit_up=Decimal("11"),
+        limit_down=Decimal("9"),
+        suspended=False,
+        upper_limit_locked=False,
+        lower_limit_locked=False,
+    )
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(
+            slippage_bps=Decimal("5"),
+            market_impact_bps=Decimal("10"),
+            max_spread_bps=Decimal("30"),
+        )
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0)), context
+    )
+
+    assert result.status == "FILLED"
+    assert result.fill_price is not None
+    assert result.fill_price > Decimal("10.01")
+    assert result.fill_price < Decimal("11")
+
+
+def test_buy_is_not_filled_when_upper_limit_is_locked() -> None:
+    from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("5000"))
+    order = OrderIntent(
+        "510300", "BUY", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar("510300", date(2024, 1, 3), 11, 11, 10, 11)
+    context = ExecutionMarketContext(
+        bid=Decimal("10.99"),
+        ask=Decimal("11"),
+        limit_up=Decimal("11"),
+        limit_down=Decimal("9"),
+        suspended=False,
+        upper_limit_locked=True,
+        lower_limit_locked=False,
+    )
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(Decimal("0"), Decimal("0"))
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0)), context
+    )
+
+    assert result.status == "NO_FILL"
+    assert result.reason == "upper price limit locked"
+    assert ledger.positions == {}
+
+
+def test_missing_execution_context_is_not_silently_assumed() -> None:
+    from etf_backtesting.engine.execution import ExecutionModel
+
+    ledger = PortfolioLedger(Decimal("5000"))
+    order = OrderIntent(
+        "510300", "BUY", Decimal("100"),
+        date(2024, 1, 2), date(2024, 1, 3),
+    )
+    bar = PriceBar("510300", date(2024, 1, 3), 10, 10.2, 9.8, 10)
+    engine = ExecutionEngine(
+        execution_model=ExecutionModel(Decimal("0"), Decimal("0"))
+    )
+    result = engine.execute_next_open(
+        order, bar, ledger, TradingCostModel(Decimal(0), Decimal(0))
+    )
+
+    assert result.status == "NO_FILL"
+    assert result.reason == "execution market context missing"
+    assert ledger.cash == Decimal("5000")
+
+
+def test_execution_model_rejects_impossible_adverse_adjustment() -> None:
+    from etf_backtesting.engine.execution import ExecutionModel
+
+    with pytest.raises(ValueError, match="below 10000 bps"):
+        ExecutionModel(Decimal("5000"), Decimal("5000"))
