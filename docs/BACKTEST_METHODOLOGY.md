@@ -105,3 +105,14 @@
 - A/B/C/D都必须传入相同口径的初始资金、交易日历、追加资金、成本模型和数据快照，比较时不得使用各自不同的回测日期轴。
 - 当分红或成交规则状态不是 PASS 时，正式运行会 fail-closed。研究性机制验证可显式设置 `research_only=True`，其输出不得标记为正式回测。
 - `per_etf_cycle_budget`、`dca_budget_by_symbol`、D策略的单只ETF市值上限与现金储备均为外部显式参数；配置未确认时不推测用户资金计划。
+
+
+## 11. 真实成交约束
+
+`ExecutionMarketContext` 是每个证券/交易日的 point-in-time 执行上下文，至少包含 bid/ask、limit_up/limit_down、suspended、upper_limit_locked、lower_limit_locked。正式成交不再把 OHLC open 当作无条件可成交价。
+
+`ExecutionModel` 显式设置 slippage_bps、market_impact_bps 和 max_spread_bps。买单以 ask 为基准，卖单以 bid 为基准，叠加不利滑点与冲击；价差超过上限或冲击后越过涨跌停价时不成交。上下文缺失、停牌状态未知、报价缺失、涨跌停状态缺失均不得默认为可交易。
+
+订单在信号日以收盘价编译，次日以实际 quote 执行。如果开盘价格和费用导致原始数量超出订单分配额度或最低现金储备，执行引擎按整手计算最大可负担数量，记录 PARTIAL；不足一手则拒单。成交结果保留 requested_quantity 与实际 quantity，报告区分全额和部分成交。
+
+`config/execution_model.yaml` 不预填滑点、冲击或价差假设。没有历史 bid/ask、限价/封板状态和经确认的执行假设时，正式回测必须 BLOCKED；研究性实验可显式 `research_only=True`，但不得标记为正式结果。
