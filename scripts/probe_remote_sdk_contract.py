@@ -268,6 +268,7 @@ def main() -> int:
             "status": (
                 "PASS"
                 if online_init_error is None
+                and daily_schema["status"] == "PASS"
                 and index_schema["status"] == "PASS"
                 and calendar["status"] == "PASS"
                 else "UNKNOWN"
