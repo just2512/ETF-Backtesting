@@ -1,0 +1,8 @@
+# Do not replace null values with guessed broker fees.
+# Confirm ETF-specific fee rules and minimum commission with the user's broker.
+commission_rate: null
+other_fee_rate: null
+minimum_commission: null
+currency_quantum: "0.01"
+rounding: "ROUND_HALF_UP"
+status: "REQUIRES_BROKER_CONFIRMATION"
