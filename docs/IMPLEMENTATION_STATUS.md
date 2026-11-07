@@ -61,3 +61,14 @@
 3. 完成涨跌停、滑点、价差和券商费用规则的成交模拟。
 4. 补齐A/B/C/D完整策略编排、资金流收益计算和滚动/敏感性报告。
 5. 以审计通过的真实数据运行历史回测；在此之前不输出真实策略收益结论。
+
+
+## 远程 stock_sdk 接入（2026-11-07）
+
+- 已合并独立适配器：src/etf_backtesting/adapters/stock_sdk.py。
+- 支持双端初始化：init(host, port) 与 set_init(online_endpoint)；服务地址通过 STOCKSDK_HOST、STOCKSDK_PORT、STOCKSDK_ONLINE_ENDPOINT 配置，不写入仓库。
+- 历史日线优先走 rd.get_data(..., frequency="1d", fq=None)，只把不复权 OHLCV 转为成交价格；原生 rd.get("日k", ...) 保留原始响应，不在字段结构未验证前强行解析。
+- 在线财务查询和实时 Tick 作为补充数据读取接口，不得替代历史日线。
+- 适配器提供 probe_symbol() / probe_universe()，输出观察到的日线覆盖与质量检查；无权威交易日历时保持 UNKNOWN。
+- CI：stock_sdk adapter PR #20 已合并，精确分支 HEAD 8425d10de8cfb32a3e949c9ef590cec3a4c44629 的 lint / pytest 均 PASS；main 合并提交 3356da86f8561b5ce0556e0f550406d56405aa73 的 CI PASS。
+- 尚未完成真实远程联通验收：GitHub Actions 无法访问用户指定的远程服务，实际字段结构、五只 ETF 历史覆盖、复权因子、分红事件及历史指数成分/权重仍须在用户运行环境探测。远程服务页面的功能描述不等同于已验证的历史时点数据契约。
