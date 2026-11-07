@@ -108,3 +108,38 @@ def test_index_export_keeps_per_date_failures_and_hashes_successes(tmp_path: Pat
     assert passed["constituent_count"] == 2
     assert len(passed["sha256"]) == 64
     assert (tmp_path / "manifest.json").exists()
+
+
+def test_normalize_separate_historical_stocks_and_weight_responses() -> None:
+    snapshot = normalize_index_snapshot(
+        {
+            "stocks": ["600000.XSHG", "000001.XSHE"],
+            "weights": {
+                "600000.XSHG": "0.4",
+                "000001.XSHE": "0.6",
+            },
+        },
+        "000300.XSHG",
+        date(2020, 6, 30),
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+    )
+
+    assert snapshot.normalized_weight_total == Decimal("1")
+    assert len(snapshot.rows) == 2
+
+
+def test_separate_index_api_mismatch_is_rejected() -> None:
+    with pytest.raises(ValueError, match="stocks/weights mismatch"):
+        normalize_index_snapshot(
+            {
+                "stocks": ["A", "B"],
+                "weights": {"A": "1"},
+            },
+            "TEST.XSHG",
+            date(2024, 1, 2),
+            symbol_field="code",
+            weight_field="weight",
+            weight_scale="fraction",
+        )
