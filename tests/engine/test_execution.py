@@ -232,7 +232,7 @@ def test_execution_rejects_spread_above_configured_maximum() -> None:
 def test_sell_is_not_filled_when_lower_limit_is_locked() -> None:
     from etf_backtesting.engine.execution import ExecutionMarketContext, ExecutionModel
 
-    ledger = PortfolioLedger(Decimal("0"))
+    ledger = PortfolioLedger(Decimal("1000"))
     ledger.buy("510300", Decimal("100"), Decimal("10"), Decimal("0"))
     order = OrderIntent(
         "510300", "SELL", Decimal("100"),
