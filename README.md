@@ -45,7 +45,7 @@
 
 ## 数据源边界
 
-支持两种 free-stockdb 接入形态：本机 LevelDB 服务（本地适配器）与用户提供的远程 `stock_sdk` 双端服务（远程适配器）。远程日线通过在线 `get_price(..., fq=None)` 读取不复权 OHLCV；交易日历与历史指数快照走对应在线 API。原生 `rd.get()` 是独立可选通道，原生端口不可用不得阻断在线回测。在线财务与 Tick 仅作为补充数据。服务地址通过环境变量配置，不写入仓库。项目不假定任一服务已具备完整历史数据、有效复权因子、分红事件或历史指数成分权重；必须先运行本机覆盖探测并核验字段和数据语义。详见 [数据源审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
+支持两种 free-stockdb 接入形态：本机 LevelDB 服务（本地适配器）与用户提供的远程 `stock_sdk` 双端服务（远程适配器）。远程日线优先通过模块级 `get_price(..., fq=None)` 读取不复权 OHLCV；若实际SDK没有导出该函数，则支持 `rd.get_data(code=..., frequency="1d", fq=None, as_df=True)`。原生 `rd.get()` 是独立高速范围查询。若 `rd.get_data` 是唯一历史入口且原生初始化失败，适配器会明确报错，不会伪称在线API成功，也不会读取本地LevelDB。在线财务与 Tick 仅作为补充数据。服务地址通过环境变量配置，不写入仓库。项目不假定任一服务已具备完整历史数据、有效复权因子、分红事件或历史指数成分权重；必须先运行远程在线API覆盖探测并核验字段和数据语义。详见 [数据源审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
 
 远程 SDK 覆盖探测（在安装了 `stock_sdk` 的本机执行）：
 
@@ -53,7 +53,7 @@
 $env:STOCKSDK_HOST = "<init() 使用的主机>"
 $env:STOCKSDK_PORT = "7899"
 $env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
-python scripts/probe_stock_sdk.py
+python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-06-30
 ```
 
 远程历史数据快照导出（仅访问在线 API，不读取本地 LevelDB）：
