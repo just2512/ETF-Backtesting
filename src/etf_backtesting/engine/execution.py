@@ -148,6 +148,23 @@ class ExecutionEngine:
         market_context: ExecutionMarketContext | None = None,
     ) -> ExecutionResult:
         if bar is None:
+            if self.execution_model is not None and self.execution_model.require_market_context:
+                if market_context is None:
+                    return self._result(
+                        order, "NO_FILL",
+                        reason="execution market context missing for absent bar",
+                    )
+                if market_context.suspended is True:
+                    return self._result(
+                        order, "NO_FILL", reason="market context reports suspension"
+                    )
+                if market_context.suspended is None:
+                    return self._result(
+                        order, "NO_FILL", reason="suspension status unknown"
+                    )
+                return self._result(
+                    order, "NO_FILL", reason="bar missing despite tradable status"
+                )
             return self._result(order, "NO_FILL", reason="no execution bar")
         if bar.symbol != order.symbol or bar.trade_date != order.execution_date:
             return self._result(order, "REJECTED", reason="execution bar does not match order")
