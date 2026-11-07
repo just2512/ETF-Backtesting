@@ -24,7 +24,7 @@ def write_inputs(tmp_path: Path, *, include_all_coverage: bool = True):
     )
     events.write_text(
         "symbol,ex_date,record_date,pay_date,cash_per_share,announcement_date,source_name,source_url\n"
-        f"510300,2024-06-10,2024-06-11,2024-06-20,0.05,2024-06-01,Exchange notice,https://notice.{DOMAIN}/event/510300\n",
+        f"510300,2024-06-10,2024-06-07,2024-06-20,0.05,2024-06-01,Exchange notice,https://notice.{DOMAIN}/event/510300\n",
         encoding="utf-8",
     )
     return events, coverage
