@@ -82,6 +82,8 @@ class ExecutionModel:
     def __post_init__(self) -> None:
         if self.slippage_bps < 0 or self.market_impact_bps < 0:
             raise ValueError("slippage and market impact must not be negative")
+        if self.slippage_bps + self.market_impact_bps >= Decimal("10000"):
+            raise ValueError("combined adverse execution adjustment must be below 10000 bps")
         if self.max_spread_bps is not None and self.max_spread_bps < 0:
             raise ValueError("max_spread_bps must not be negative")
 
