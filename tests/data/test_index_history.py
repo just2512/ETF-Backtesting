@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from decimal import Decimal
 
 from etf_backtesting.data.index_history import (
     export_index_snapshots,
@@ -43,7 +44,7 @@ def test_normalize_percent_weights_only_when_scale_is_explicit() -> None:
     assert snapshot.source_weight_total == 100
     assert snapshot.normalized_weight_total == 1
     assert [row.weight_fraction for row in snapshot.rows] == [
-        pytest.approx(0.75), pytest.approx(0.25)
+        Decimal("0.25"), Decimal("0.75")
     ]
 
 
