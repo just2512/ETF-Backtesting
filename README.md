@@ -67,7 +67,13 @@ python scripts/export_remote_history.py
 
 默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。某只 ETF 拉取失败不会丢弃其他成功结果；空交易日历或日历接口异常必须标记 UNKNOWN。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
 
-历史指数成分/权重快照导出（权重字段和单位必须先从 SDK 实际返回值确认，禁止自动猜测）：
+远程 SDK 原始接口/历史指数返回结构探测（只访问在线接口，不读取本地 LevelDB）：
+
+```powershell
+python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-06-30
+```
+
+输出包含实际加载的 `stock_sdk` 模块路径、各接口函数签名、交易日历样本、历史指数返回列名/数据类型/前五行及数值列统计。证券代码字段和权重单位只提供证据，不自动猜测。确认字段后再运行以下历史快照导出：
 
 ```powershell
 python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30 2021-06-30 --symbol-field <实际证券代码字段> --weight-field <实际权重字段> --weight-scale percent
