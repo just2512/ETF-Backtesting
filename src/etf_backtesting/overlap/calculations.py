@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
+from datetime import date
 from math import isclose
-from typing import Mapping
+
+from etf_backtesting.contracts import IndexConstituent
 
 
 def constituent_jaccard(
@@ -67,3 +70,30 @@ def top_duplicate_holdings(
         raise ValueError("limit must be positive")
     exposures = portfolio_exposure(etf_allocations, index_weights)
     return sorted(exposures.items(), key=lambda item: (-item[1], item[0]))[:limit]
+
+
+
+def active_constituent_weights(
+    records: Iterable[IndexConstituent],
+    index_id: str,
+    as_of: date,
+) -> dict[str, float]:
+    """Rebuild an index snapshot using effective dates, never today's holdings."""
+    active = [
+        row for row in records
+        if row.index_id == index_id and row.active_on(as_of)
+    ]
+    if not active:
+        raise ValueError(f"no active constituent records for {index_id} on {as_of}")
+    if any(row.weight is None for row in active):
+        raise ValueError("historical constituent weights are incomplete for this date")
+    weights: dict[str, float] = {}
+    for row in active:
+        if row.weight is None or row.weight < 0:
+            raise ValueError("historical constituent weights must be non-negative")
+        if row.constituent_symbol in weights:
+            raise ValueError(f"duplicate active constituent: {row.constituent_symbol}")
+        weights[row.constituent_symbol] = row.weight
+    if not isclose(sum(weights.values()), 1.0, rel_tol=0.0, abs_tol=1e-4):
+        raise ValueError("active historical index weights must sum to 1")
+    return dict(sorted(weights.items()))
