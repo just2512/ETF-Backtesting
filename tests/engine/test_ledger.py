@@ -17,6 +17,9 @@ def test_buy_sell_and_distribution_update_ledger() -> None:
     ledger.sell("510300", "5", "11", "1")
     assert ledger.cash == Decimal(955)
     assert ledger.positions["510300"] == Decimal(5)
+    assert ledger.events[0].cash_delta == Decimal("-101")
+    assert ledger.events[1].cash_delta == Decimal("2")
+    assert ledger.events[2].cash_delta == Decimal("54")
     assert len(ledger.events) == 3
 
 
