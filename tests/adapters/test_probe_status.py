@@ -1,5 +1,3 @@
-from datetime import date
-
 from etf_backtesting.adapters.free_stockdb import FreeStockDBAdapter
 
 
