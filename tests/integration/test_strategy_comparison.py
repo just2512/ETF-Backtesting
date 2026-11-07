@@ -62,7 +62,7 @@ def test_comparison_matrix_runs_A_B_C_per_etf_and_D_as_shared_pool() -> None:
     for symbol_runs in result.single_etf_runs.values():
         for run in symbol_runs.values():
             assert run.research_only is True
-            assert tuple(item.trade_date for item in run.execution.snapshots[1::2]) == tuple(days)
+            assert tuple(item.trade_date for item in run.execution.snapshots[1:]) == tuple(days)
     assert tuple(
-        item.trade_date for item in result.shared_pool_run.execution.snapshots[1::2]
+        item.trade_date for item in result.shared_pool_run.execution.snapshots[1:]
     ) == tuple(days)
