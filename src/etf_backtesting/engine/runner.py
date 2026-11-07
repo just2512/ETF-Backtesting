@@ -1,9 +1,9 @@
-"""Event-driven portfolio runner for pre-generated, causally dated orders."""
+"""Event-driven portfolio runner with pre-generated and close-generated orders."""
 
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -34,8 +34,14 @@ class BacktestRunResult:
     snapshots: tuple[AccountSnapshot, ...]
 
 
+SignalGenerator = Callable[
+    [date, Mapping[str, PriceBar], PortfolioLedger, Mapping[str, Decimal], date],
+    Sequence[OrderIntent],
+]
+
+
 class PortfolioBacktestRunner:
-    """Execute pre-generated orders at their specified next-session open."""
+    """Execute orders at next-session open and optionally generate new close signals."""
 
     def __init__(self, execution_engine: ExecutionEngine | None = None) -> None:
         self.execution_engine = execution_engine or ExecutionEngine()
@@ -48,6 +54,8 @@ class PortfolioBacktestRunner:
         costs: TradingCostModel,
         contributions: Mapping[date, Decimal] | None = None,
         dividends: Sequence[ETFDividend] = (),
+        trading_days: Sequence[date] | None = None,
+        signal_generator: SignalGenerator | None = None,
     ) -> BacktestRunResult:
         indexed_bars: dict[str, dict[date, PriceBar]] = {}
         all_dates: set[date] = set()
@@ -66,6 +74,19 @@ class PortfolioBacktestRunner:
         for order in orders:
             orders_by_date[order.execution_date].append(order)
             all_dates.add(order.execution_date)
+
+        if trading_days is None:
+            calendar_days = sorted({bar.trade_date for bars in bars_by_symbol.values() for bar in bars})
+        else:
+            calendar_days = list(trading_days)
+            if calendar_days != sorted(set(calendar_days)):
+                raise ValueError("trading_days must be unique and ascending")
+            bar_dates = {bar.trade_date for bars in bars_by_symbol.values() for bar in bars}
+            invalid_bar_dates = sorted(bar_dates - set(calendar_days))
+            if invalid_bar_dates:
+                raise ValueError(f"market bars fall outside trading_days: {invalid_bar_dates}")
+        calendar_positions = {day: index for index, day in enumerate(calendar_days)}
+        all_dates.update(calendar_days)
 
         contribution_map = dict(contributions or {})
         all_dates.update(contribution_map)
@@ -109,10 +130,9 @@ class PortfolioBacktestRunner:
             elif contribution < 0:
                 raise ValueError("negative contributions are not supported; model withdrawals explicitly")
 
-            for order in sorted(
-                orders_by_date.get(day, []),
-                key=lambda item: (item.signal_date, item.symbol, item.side),
-            ):
+            # Preserve caller/allocation order. In the shared-cash strategy this is
+            # the explicit signal-priority order returned by CashPoolAllocator.
+            for order in orders_by_date.get(day, []):
                 bar = indexed_bars.get(order.symbol, {}).get(day)
                 executions.append(
                     self.execution_engine.execute_next_open(order, bar, ledger, costs)
@@ -149,5 +169,25 @@ class PortfolioBacktestRunner:
                 stale_symbols=stale,
                 phase="CLOSE",
             ))
+
+            if signal_generator is not None and day in calendar_positions:
+                calendar_index = calendar_positions[day]
+                if calendar_index + 1 < len(calendar_days):
+                    next_session = calendar_days[calendar_index + 1]
+                    generated_orders = signal_generator(
+                        day,
+                        todays_bars,
+                        ledger,
+                        dict(last_closes),
+                        next_session,
+                    )
+                    for generated in generated_orders:
+                        if generated.signal_date != day:
+                            raise ValueError("generated order signal_date must equal current close date")
+                        if generated.execution_date != next_session:
+                            raise ValueError(
+                                "generated orders must execute on the next exchange session"
+                            )
+                        orders_by_date[next_session].append(generated)
 
         return BacktestRunResult(ledger, tuple(executions), tuple(snapshots))

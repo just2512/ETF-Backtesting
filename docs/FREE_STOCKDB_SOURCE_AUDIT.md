@@ -142,3 +142,22 @@ python scripts/probe_stock_sdk.py --output reports/audit/stock_sdk_probe.json
 3. 历史指数成分门禁：历史成分快照接口可用；历史权重字段单位、权重归一、有效日期与公布日期仍须由导入器验证后，才能放行行业暴露约束。
 4. 分红门禁：仍 BLOCKED。未取得官方分红公告事件前，不得把现金分红设为零，也不得将复权价差转换为现金分红。
 5. 成交规则门禁：涨跌停、停牌可成交状态、买卖价差、滑点、价格冲击和券商最低收费尚未全部核验；未完成前只能输出明确标记的简化成交实验，不得称为完整实盘约束回测。
+
+
+## 远程在线 API：数据导入器与权重语义门禁（2026-11-07）
+
+远程在线 API 已由用户实测可读取历史指数成分/权重快照，但仅凭接口返回成功，不能确认权重字段是 0–1 还是 0–100，也不能确认是否完整覆盖全部成分。项目新增：
+
+- `src/etf_backtesting/data/index_history.py`：历史快照规范化与导出。
+- `scripts/export_index_history.py`：按指数代码和历史日期逐次调用远程接口。
+- `tests/data/test_index_history.py`：覆盖日期绑定、fraction/percent显式单位、重复证券、缺字段、权重不归一、逐日期失败隔离和快照哈希。
+
+导入器要求调用者显式提供真实返回字段名及权重单位。它不会根据 0.25 猜测 25% 或 0.25%，也不会把不完整权重列表自动缩放到100%。只有权重总和在显式容差内（默认0.5个百分点）才允许标记 PASS。当前仍未获得远程 SDK 的真实原始返回样本，因此字段名与单位尚不能在本次代码侧独立确认；真实导入门禁仍为 UNKNOWN，行业暴露约束不得因此自动放行。
+
+命令示例（尖括号内容必须替换为 SDK 返回的实际字段名）：
+
+```powershell
+python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30 2021-06-30 --symbol-field <实际证券代码字段> --weight-field <实际权重字段> --weight-scale percent
+```
+
+`weight-scale` 只能显式选 `fraction` 或 `percent`。导出 manifest 保存查询日期、字段映射、单位、权重合计、证券数量和 SHA-256；单个日期失败不会抹掉其他成功日期。

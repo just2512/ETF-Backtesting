@@ -25,7 +25,8 @@ def budget_to_buy_order(
     if quantity <= 0:
         return None
     return OrderIntent(
-        symbol, "BUY", Decimal(quantity), signal_date, execution_date
+        symbol, "BUY", Decimal(quantity), signal_date, execution_date,
+        cash_limit=allocated_budget,
     )
 
 

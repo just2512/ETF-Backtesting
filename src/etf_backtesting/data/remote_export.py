@@ -56,8 +56,7 @@ def _write_symbol_csv(path: Path, symbol: str, bars: list[Any]) -> str:
                 "source": bar.source or StockSDKAdapter.SOURCE_NAME,
             })
     temporary.replace(path)
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return digest
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def export_snapshot(
@@ -65,46 +64,82 @@ def export_snapshot(
     symbols: list[str],
     output_dir: Path,
 ) -> dict[str, object]:
+    """Export each symbol independently and preserve partial failures in the manifest."""
     symbol_results: list[dict[str, object]] = []
     all_bars: dict[str, list[Any]] = {}
     for symbol in symbols:
-        bars = adapter.read_daily_bars(symbol)
-        if not bars:
+        try:
+            bars = adapter.read_daily_bars(symbol)
+            if not bars:
+                symbol_results.append({
+                    "symbol": symbol,
+                    "status": "MISSING",
+                    "error": "online get_price returned no daily bars",
+                    "daily_bar_count": 0,
+                    "first_date": None,
+                    "last_date": None,
+                    "calendar_completeness": "UNKNOWN",
+                    "unclassified_calendar_sessions": [],
+                })
+                continue
+            bars = sorted(bars, key=lambda bar: bar.trade_date)
+            all_bars[symbol] = bars
+            file_path = output_dir / f"{symbol}.csv"
+            digest = _write_symbol_csv(file_path, symbol, bars)
             symbol_results.append({
                 "symbol": symbol,
-                "status": "MISSING",
+                "status": "PASS",
+                "file": file_path.as_posix(),
+                "sha256": digest,
+                "daily_bar_count": len(bars),
+                "first_date": bars[0].trade_date.isoformat(),
+                "last_date": bars[-1].trade_date.isoformat(),
+                "calendar_completeness": "UNKNOWN",
+                "unclassified_calendar_sessions": [],
+            })
+        except Exception as exc:
+            symbol_results.append({
+                "symbol": symbol,
+                "status": "UNKNOWN",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
                 "daily_bar_count": 0,
                 "first_date": None,
                 "last_date": None,
+                "calendar_completeness": "UNKNOWN",
+                "unclassified_calendar_sessions": [],
             })
-            continue
-        all_bars[symbol] = bars
-        file_path = output_dir / f"{symbol}.csv"
-        digest = _write_symbol_csv(file_path, symbol, bars)
-        symbol_results.append({
-            "symbol": symbol,
-            "status": "PASS",
-            "file": file_path.as_posix(),
-            "sha256": digest,
-            "daily_bar_count": len(bars),
-            "first_date": bars[0].trade_date.isoformat(),
-            "last_date": bars[-1].trade_date.isoformat(),
-        })
 
     populated = list(all_bars.values())
+    calendar_error: dict[str, str] | None = None
     if populated:
         calendar_start = min(bars[0].trade_date for bars in populated).strftime("%Y%m%d")
         calendar_end = max(bars[-1].trade_date for bars in populated).strftime("%Y%m%d")
-        trade_days = adapter.read_trade_days(calendar_start, calendar_end)
+        try:
+            trade_days = adapter.read_trade_days(calendar_start, calendar_end)
+            if not trade_days:
+                calendar_error = {
+                    "type": "EmptyCalendar",
+                    "message": "get_trade_days returned no sessions for a non-empty price range",
+                }
+        except Exception as exc:
+            trade_days = []
+            calendar_error = {"type": type(exc).__name__, "message": str(exc)}
     else:
         trade_days = []
+        calendar_error = {
+            "type": "Unavailable",
+            "message": "No successful price series exists from which to request a calendar",
+        }
 
     for result in symbol_results:
         symbol = str(result["symbol"])
         bars = all_bars.get(symbol, [])
         if not bars:
+            continue
+        if calendar_error is not None:
             result["calendar_completeness"] = "UNKNOWN"
-            result["unclassified_calendar_sessions"] = []
+            result["calendar_error"] = calendar_error
             continue
         expected = [
             day for day in trade_days
@@ -127,12 +162,15 @@ def export_snapshot(
         "frequency": "daily",
         "calendar_source": "get_trade_days",
         "calendar_trade_day_count": len(trade_days),
+        "calendar_status": "PASS" if calendar_error is None else "UNKNOWN",
+        "calendar_error": calendar_error,
         "symbols": symbol_results,
     }
-    manifest_text = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
-    _atomic_write(output_dir / "manifest.json", manifest_text)
+    _atomic_write(
+        output_dir / "manifest.json",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    )
     return manifest
-
 
 
 def main() -> int:
@@ -156,7 +194,14 @@ def main() -> int:
         return 4
 
     results = manifest["symbols"]
-    missing = any(item["status"] != "PASS" for item in results)
-    unknown_calendar = any(item["calendar_completeness"] != "PASS" for item in results)
+    missing = any(item["status"] == "MISSING" for item in results)
+    unknown = any(
+        item["status"] == "UNKNOWN" or item["calendar_completeness"] != "PASS"
+        for item in results
+    ) or manifest["calendar_status"] != "PASS"
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
-    return 3 if missing else 4 if unknown_calendar else 0
+    return 3 if missing else 4 if unknown else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
