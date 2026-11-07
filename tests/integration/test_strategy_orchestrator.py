@@ -199,3 +199,30 @@ def test_strategy_d_formal_industry_caps_require_historical_index_gate() -> None
             industry_caps_enabled=True,
             industry_context_provider=lambda *_: None,
         )
+
+
+def test_formal_run_requires_explicit_execution_model_and_market_contexts() -> None:
+    from etf_backtesting.engine.execution import ExecutionModel
+
+    runner = StrategyBacktestRunner()
+    bars_by_symbol = {"510300": bars("510300", [10, 10, 10, 10, 10])}
+    common = {
+        "initial_cash": Decimal("10000"),
+        "costs": free_costs(),
+        "dividend_status": "PASS",
+        "execution_rules_status": "PASS",
+        "dca_budget_by_symbol": {"510300": Decimal("5000")},
+        "dca_dates": {DAYS[0]},
+    }
+    with pytest.raises(ValueError, match="require explicit quotes"):
+        runner.run("A", bars_by_symbol, DAYS, **common)
+
+    with pytest.raises(ValueError, match="market context missing"):
+        runner.run(
+            "A",
+            bars_by_symbol,
+            DAYS,
+            **common,
+            execution_model=ExecutionModel(Decimal("0"), Decimal("0")),
+            execution_contexts={},
+        )
