@@ -105,3 +105,25 @@ def test_dividend_snapshot_rejects_announcement_after_ex_date(tmp_path: Path) ->
             coverage_end=date(2026, 12, 31),
             approved_domains={DOMAIN},
         )
+
+
+def test_empty_event_file_is_valid_only_with_complete_symbol_coverage(
+    tmp_path: Path,
+) -> None:
+    events, coverage = write_inputs(tmp_path)
+    events.write_text(
+        "symbol,ex_date,record_date,pay_date,cash_per_share,announcement_date,source_name,source_url\n",
+        encoding="utf-8",
+    )
+    snapshot = load_dividend_snapshot(
+        events,
+        coverage,
+        symbols=SYMBOLS,
+        coverage_start=date(2012, 1, 1),
+        coverage_end=date(2026, 12, 31),
+        approved_domains={DOMAIN},
+    )
+
+    assert snapshot.events == ()
+    assert len(snapshot.coverage) == len(SYMBOLS)
+    assert len(snapshot.sha256) == 64
