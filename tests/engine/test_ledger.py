@@ -20,6 +20,8 @@ def test_buy_sell_and_distribution_update_ledger() -> None:
     assert ledger.events[0].cash_delta == Decimal("-101")
     assert ledger.events[1].cash_delta == Decimal("2")
     assert ledger.events[2].cash_delta == Decimal("54")
+    assert ledger.events[2].realized_pnl == Decimal("3.5")
+    assert ledger.events[2].cost_basis_after == Decimal("50.5")
     assert len(ledger.events) == 3
 
 
@@ -29,3 +31,12 @@ def test_ledger_rejects_overspending_and_overselling() -> None:
         ledger.buy("510300", "20", "10")
     with pytest.raises(ValueError, match="insufficient position"):
         ledger.sell("510300", "1", "10")
+
+
+
+def test_external_contribution_is_distinct_ledger_event() -> None:
+    ledger = PortfolioLedger(Decimal("100"))
+    event = ledger.contribute_cash("500")
+    assert event.event_type == "CONTRIBUTION"
+    assert event.cash_delta == Decimal("500")
+    assert ledger.cash == Decimal("600")
