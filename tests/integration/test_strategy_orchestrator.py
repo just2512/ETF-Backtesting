@@ -68,7 +68,7 @@ def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
         dividend_status="UNKNOWN",
         execution_rules_status="UNKNOWN",
         research_only=True,
-        per_etf_cycle_budget={"510300": Decimal("10000")},
+        per_etf_cycle_budget={"510300": Decimal("5000")},
         bollinger_period=3,
         bollinger_deviations=1.0,
     )
