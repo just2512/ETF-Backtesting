@@ -196,3 +196,21 @@ def test_rd_get_data_fallback_reports_native_init_failure_without_using_local_da
     assert sdk.endpoint == "106.75.217.246:12328"
     with pytest.raises(ConnectionError, match="native StockDB initialization failed"):
         adapter.read_daily_bars("510300")
+
+
+def test_calendar_and_index_api_names_are_configurable(monkeypatch):
+    sdk, adapter = make_adapter()
+    sdk.custom_calendar = lambda **kwargs: ["2024-01-02"]
+    sdk.custom_index = lambda index_id, *, date: {
+        "index_id": index_id,
+        "date": date,
+        "constituents": [],
+    }
+    monkeypatch.setenv("STOCKSDK_TRADE_DAYS_API", "custom_calendar")
+    monkeypatch.setenv("STOCKSDK_INDEX_API", "custom_index")
+
+    assert adapter.read_trade_days("20240101", "20240103") == [date(2024, 1, 2)]
+    result = adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+    assert result["index_id"] == "000300.XSHG"
+    assert result["date"] == "2020-06-30"
