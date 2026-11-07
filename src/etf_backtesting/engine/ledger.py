@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Iterable
 
 
 def _decimal(value: Decimal | str | int | float) -> Decimal:
@@ -20,6 +19,7 @@ class LedgerEvent:
     fee: Decimal
     cash_after: Decimal
     position_after: Decimal
+    cash_delta: Decimal
 
 
 @dataclass(slots=True)
@@ -48,7 +48,7 @@ class PortfolioLedger:
             raise ValueError("insufficient cash")
         self.cash -= total
         self.positions[symbol] = self.positions.get(symbol, Decimal("0")) + qty
-        return self._record("BUY", symbol, qty, px, cost)
+        return self._record("BUY", symbol, qty, px, cost, -total)
 
     def sell(
         self,
@@ -68,7 +68,7 @@ class PortfolioLedger:
             raise ValueError("fee exceeds sale proceeds")
         self.cash += proceeds
         self.positions[symbol] = held - qty
-        return self._record("SELL", symbol, qty, px, cost)
+        return self._record("SELL", symbol, qty, px, cost, proceeds)
 
     def credit_cash_distribution(
         self, symbol: str, amount: Decimal | str | int | float
@@ -77,7 +77,7 @@ class PortfolioLedger:
         if value < 0:
             raise ValueError("cash distribution must not be negative")
         self.cash += value
-        return self._record("CASH_DISTRIBUTION", symbol, Decimal("0"), Decimal("0"), Decimal("0"))
+        return self._record("CASH_DISTRIBUTION", symbol, Decimal("0"), Decimal("0"), Decimal("0"), value)
 
     def _record(
         self,
@@ -86,6 +86,7 @@ class PortfolioLedger:
         quantity: Decimal,
         price: Decimal,
         fee: Decimal,
+        cash_delta: Decimal,
     ) -> LedgerEvent:
         event = LedgerEvent(
             event_type=event_type,
@@ -95,6 +96,7 @@ class PortfolioLedger:
             fee=fee,
             cash_after=self.cash,
             position_after=self.positions.get(symbol, Decimal("0")),
+            cash_delta=cash_delta,
         )
         self.events.append(event)
         return event
