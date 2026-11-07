@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
+from datetime import date
 from math import isclose
-from typing import Mapping
+
+from etf_backtesting.contracts import IndexConstituent
 
 
 def constituent_jaccard(
