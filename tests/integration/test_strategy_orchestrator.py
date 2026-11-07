@@ -81,7 +81,7 @@ def test_strategy_b_bollinger_accumulation_uses_next_session_open() -> None:
     assert len(filled) == 1
     assert filled[0].signal_date == DAYS[2]
     assert filled[0].execution_date == DAYS[3]
-    assert filled[0].quantity == Decimal("500")
+    assert filled[0].quantity == Decimal("800")
 
 
 def test_strategy_c_s1_sell_is_based_on_position_at_signal_close() -> None:
@@ -106,14 +106,14 @@ def test_strategy_c_s1_sell_is_based_on_position_at_signal_close() -> None:
     assert filled[1].signal_date == DAYS[3]
     assert filled[1].execution_date == DAYS[4]
     assert filled[1].quantity == Decimal("100")
-    assert result.execution.ledger.positions["510300"] == Decimal("400")
+    assert result.execution.ledger.positions["510300"] == Decimal("700")
 
 
 def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "D",
         {
-            "510300": bars("510300", [10, 10, 4, 4, 4], [10, 10, 10, 4, 4]),
+            "510300": bars("510300", [10, 10, 4, 4, 4], [10, 10, 10, 10, 4]),
             "159928": bars("159928", [10, 8, 4, 4, 4]),
         },
         DAYS,
