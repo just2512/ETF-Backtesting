@@ -104,3 +104,19 @@ def test_calendar_service_failure_does_not_discard_downloaded_bars(tmp_path: Pat
     assert manifest["symbols"][0]["calendar_completeness"] == "UNKNOWN"
     assert manifest["calendar_error"]["type"] == "TimeoutError"
     assert (tmp_path / "510300.csv").exists()
+
+
+def test_late_first_bar_never_passes_full_history_coverage(tmp_path: Path) -> None:
+    manifest = export_snapshot(
+        FakeRemoteAdapter(),
+        ["510300"],
+        tmp_path,
+        start="20000101",
+        end="20240104",
+        expected_first_dates={"510300": date(2012, 5, 28)},
+    )
+
+    symbol = manifest["symbols"][0]
+    assert symbol["status"] == "PASS"
+    assert symbol["first_date_status"] == "UNKNOWN"
+    assert symbol["history_coverage_status"] == "UNKNOWN"
