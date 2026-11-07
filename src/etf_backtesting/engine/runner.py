@@ -22,6 +22,7 @@ class AccountSnapshot:
     total_value: Decimal
     external_contribution: Decimal
     stale_symbols: tuple[str, ...]
+    phase: str = "CLOSE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +71,19 @@ class PortfolioBacktestRunner:
         snapshots: list[AccountSnapshot] = []
         last_closes: dict[str, Decimal] = {}
 
-        for day in sorted(all_dates):
+        ordered_dates = sorted(all_dates)
+        if ordered_dates:
+            snapshots.append(AccountSnapshot(
+                trade_date=ordered_dates[0],
+                cash=ledger.cash,
+                holdings_value=Decimal("0"),
+                total_value=ledger.cash,
+                external_contribution=Decimal("0"),
+                stale_symbols=(),
+                phase="PRE_OPEN",
+            ))
+
+        for day in ordered_dates:
             contribution = contribution_map.get(day, Decimal("0"))
             if contribution > 0:
                 ledger.contribute_cash(contribution)
@@ -109,6 +122,7 @@ class PortfolioBacktestRunner:
                 total_value=ledger.cash + holdings_value,
                 external_contribution=contribution,
                 stale_symbols=stale,
+                phase="CLOSE",
             ))
 
         return BacktestRunResult(ledger, tuple(executions), tuple(snapshots))
