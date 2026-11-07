@@ -75,3 +75,13 @@
 
 - 已增加本地命令 scripts/probe_stock_sdk.py，默认探测五只 ETF 并输出 reports/audit/stock_sdk_probe.json；当前尚未收到该脚本在用户机器上的真实运行结果。
 - 覆盖探测扩展已通过 PR #21 合并；精确分支 HEAD 8377d835bbe0ebf38e7b1f8e3b99b0419fcd97be 的 lint / pytest PASS（Actions run 42377205732）。本机 CLI 随后在 main 增加，尚未取得用户运行后的 JSON。
+
+
+## 远程在线 API 主链路改造（work/online-api-backtest）
+
+- 历史日线入口已改为在线 `get_price(..., frequency="daily", fq=None, panel=False)`；成交价格只接受不复权 OHLCV。
+- 在线端点 `set_init()` 独立初始化。原生 `init(host, port)` 失败会被记录，不再阻断在线历史行情查询；调用原生 `rd.get()` 时才明确报出原生连接失败。
+- 已增加 `get_trade_days(start_date, end_date)` 和 `get_history_constituents(index_id, date=...)` 的显式日期读取封装；指数代码由调用方传入含交易所后缀的标识（例如 `000300.XSHG`），不静默改写。
+- 新增测试覆盖：7899拒连但12328在线行情仍可读取、强制 `fq=None`、交易日历日期边界、历史指数快照日期参数、原生通道失败隔离。
+- 以上是代码与模拟契约测试，不代表本次执行环境已真实连接远程服务。真实数据回测必须在能访问远程在线 API 的运行环境执行，并保存原始请求参数、响应摘要和数据快照哈希。
+- 分红事件、历史指数权重字段语义、ETF停牌/涨跌停、价差与滑点仍需独立验收；缺失项不得由行情价格推断。
