@@ -93,7 +93,7 @@ class FreeStockDBAdapter:
             "daily_bar_count": len(bars),
             "first_date": bars[0].trade_date.isoformat() if bars else None,
             "last_date": bars[-1].trade_date.isoformat() if bars else None,
-            "adjustment_factor_status": "PASS" if factors else "MISSING",
+            "adjustment_factor_status": "UNKNOWN" if factors else "MISSING",
             "adjustment_factor_count": len(factors),
             "cash_dividend_status": "MISSING",
             "historical_index_constituent_status": "MISSING",
