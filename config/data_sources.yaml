@@ -29,3 +29,19 @@ trading_calendar:
     - market
     - trade_date
     - is_open
+
+stock_sdk:
+  enabled: false
+  host_env: "STOCKSDK_HOST"
+  port_env: "STOCKSDK_PORT"
+  default_port: 7899
+  online_endpoint_env: "STOCKSDK_ONLINE_ENDPOINT"
+  sdk_module_env: "STOCKSDK_MODULE"
+  default_sdk_module: "stock_sdk"
+  daily_price_basis: "UNADJUSTED"
+  normalized_daily_api: "rd.get_data"
+  native_daily_api: "rd.get"
+  adjustment_factor_semantics: "UNKNOWN"
+  cash_dividend_events: "UNKNOWN"
+  historical_index_constituents: "UNKNOWN"
+  fundamentals_and_ticks: "SUPPLEMENTAL_ONLY"
