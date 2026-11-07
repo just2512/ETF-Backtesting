@@ -217,7 +217,7 @@ def test_formal_run_requires_explicit_execution_model_and_market_contexts() -> N
     with pytest.raises(ValueError, match="require explicit quotes"):
         runner.run("A", bars_by_symbol, DAYS, **common)
 
-    with pytest.raises(ValueError, match="market context missing"):
+    with pytest.raises(ValueError, match="missing or unknown execution market context"):
         runner.run(
             "A",
             bars_by_symbol,
