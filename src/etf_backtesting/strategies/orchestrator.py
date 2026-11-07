@@ -28,7 +28,7 @@ from etf_backtesting.strategies.orders import budget_to_buy_order, sell_signal_t
 
 
 StrategyName = Literal["A", "B", "C", "D"]
-GateStatus = Literal["PASS", "MISSING", "UNKNOWN"]
+GateStatus = Literal["PASS", "MISSING", "UNKNOWN", "NOT_APPLICABLE"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +37,7 @@ class StrategyRunResult:
     execution: BacktestRunResult
     dividend_gate: GateStatus
     execution_rules_gate: GateStatus
+    index_exposure_gate: GateStatus
     research_only: bool
 
 
@@ -318,6 +319,7 @@ class StrategyBacktestRunner:
         costs: TradingCostModel,
         dividend_status: GateStatus,
         execution_rules_status: GateStatus,
+        index_exposure_status: GateStatus | None = None,
         research_only: bool = False,
         contributions: Mapping[date, Decimal] | None = None,
         dividends: Sequence[ETFDividend] = (),
@@ -327,12 +329,24 @@ class StrategyBacktestRunner:
             raise ValueError(
                 "strategies A/B/C run one ETF per comparison; strategy D is the multi-ETF shared-pool run"
             )
+        industry_caps_enabled = bool(strategy_options.get("industry_caps_enabled", False))
+        if strategy == "D" and industry_caps_enabled:
+            if index_exposure_status is None:
+                raise ValueError(
+                    "strategy D with industry caps requires an explicit index_exposure_status"
+                )
+        else:
+            index_exposure_status = "NOT_APPLICABLE"
         if not research_only and (
-            dividend_status != "PASS" or execution_rules_status != "PASS"
+            dividend_status != "PASS"
+            or execution_rules_status != "PASS"
+            or (strategy == "D" and industry_caps_enabled and index_exposure_status != "PASS")
         ):
             raise ValueError(
                 "formal A/B/C/D comparison is blocked until dividend and execution-rule gates pass"
             )
+        if initial_cash <= 0:
+            raise ValueError("initial_cash must be positive")
         orchestrator = StrategySignalOrchestrator(
             strategy,
             lot_size=self.lot_size,
@@ -363,5 +377,6 @@ class StrategyBacktestRunner:
             execution=execution,
             dividend_gate=dividend_status,
             execution_rules_gate=execution_rules_status,
+            index_exposure_gate=index_exposure_status,
             research_only=research_only,
         )
