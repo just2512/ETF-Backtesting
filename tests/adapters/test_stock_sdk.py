@@ -162,7 +162,7 @@ class FakeNativeRDWithData:
 
 def test_rd_get_data_is_supported_as_unadjusted_history_fallback():
     sdk = FakeSDK()
-    del sdk.get_price
+    sdk.get_price = None
     sdk.rd = FakeNativeRDWithData()
     adapter = StockSDKAdapter(sdk, "127.0.0.1", 7899, "127.0.0.1:12328")
 
