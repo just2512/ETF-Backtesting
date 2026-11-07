@@ -67,6 +67,94 @@ def _records_from_result(result: Any) -> list[Mapping[str, Any]]:
     return [dict(row) for row in result]
 
 
+def _extract_stock_codes(raw: Any, symbol_field: str) -> list[str]:
+    if raw is None:
+        raise ValueError("historical index stocks API returned no data")
+    if callable(getattr(raw, "reset_index", None)):
+        raw = raw.reset_index()
+    columns = getattr(raw, "columns", None)
+    if columns is not None:
+        names = [str(item) for item in list(columns)]
+        if symbol_field in names:
+            values = raw[symbol_field].tolist()
+        elif len(names) == 1:
+            values = raw[names[0]].tolist()
+        elif getattr(getattr(raw, "index", None), "name", None) == symbol_field:
+            values = list(raw.index)
+        else:
+            raise ValueError(
+                f"cannot identify index stock code column; available fields: {names}"
+            )
+    elif isinstance(raw, Mapping):
+        if symbol_field in raw:
+            values = raw[symbol_field]
+        else:
+            raise ValueError(
+                f"index stocks mapping must contain the configured field {symbol_field!r}"
+            )
+    elif isinstance(raw, (list, tuple)):
+        if all(isinstance(item, (str, int)) for item in raw):
+            values = raw
+        elif all(isinstance(item, Mapping) for item in raw):
+            values = [item.get(symbol_field) for item in raw]
+        else:
+            raise TypeError("index stocks response must be codes or records")
+    else:
+        raise TypeError("unsupported index stocks response type")
+
+    codes = [str(value).strip().upper() for value in values]
+    if not codes or any(not value for value in codes):
+        raise ValueError("index stocks response contains no codes or empty codes")
+    if len(codes) != len(set(codes)):
+        raise ValueError("index stocks response contains duplicate codes")
+    return codes
+
+
+def _weight_records(
+    raw: Any,
+    symbol_field: str,
+    weight_field: str,
+) -> list[Mapping[str, Any]]:
+    if isinstance(raw, Mapping) and symbol_field not in raw and weight_field not in raw:
+        if raw and all(not isinstance(value, (Mapping, list, tuple)) for value in raw.values()):
+            return [
+                {symbol_field: symbol, weight_field: weight}
+                for symbol, weight in raw.items()
+            ]
+    return _records_from_result(raw)
+
+
+def _combine_separate_index_apis(
+    raw: Mapping[str, Any],
+    symbol_field: str,
+    weight_field: str,
+) -> list[Mapping[str, Any]]:
+    stocks = _extract_stock_codes(raw["stocks"], symbol_field)
+    weights = _weight_records(raw["weights"], symbol_field, weight_field)
+    weight_by_symbol: dict[str, Any] = {}
+    for position, row in enumerate(weights):
+        symbol_value = row.get(symbol_field)
+        weight_value = row.get(weight_field)
+        if symbol_value is None or weight_value is None:
+            raise ValueError(
+                f"weight row {position} missing {symbol_field!r}/{weight_field!r}"
+            )
+        symbol = str(symbol_value).strip().upper()
+        if symbol in weight_by_symbol:
+            raise ValueError(f"duplicate index weight for {symbol}")
+        weight_by_symbol[symbol] = weight_value
+    missing = sorted(set(stocks) - set(weight_by_symbol))
+    extra = sorted(set(weight_by_symbol) - set(stocks))
+    if missing or extra:
+        raise ValueError(
+            f"index stocks/weights mismatch; missing_weights={missing}, extra_weights={extra}"
+        )
+    return [
+        {symbol_field: symbol, weight_field: weight_by_symbol[symbol]}
+        for symbol in stocks
+    ]
+
+
 def normalize_index_snapshot(
     raw: Any,
     index_id: str,
@@ -90,7 +178,10 @@ def normalize_index_snapshot(
     if weight_tolerance < 0:
         raise ValueError("weight_tolerance must not be negative")
 
-    records = _records_from_result(raw)
+    if isinstance(raw, Mapping) and "stocks" in raw and "weights" in raw:
+        records = _combine_separate_index_apis(raw, symbol_field, weight_field)
+    else:
+        records = _records_from_result(raw)
     rows: list[IndexWeightSnapshotRow] = []
     seen: set[str] = set()
     source_total = Decimal("0")
