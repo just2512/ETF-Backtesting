@@ -14,7 +14,7 @@ from datetime import date
 from typing import Any
 
 from etf_backtesting.contracts import PriceBar
-from etf_backtesting.data.audit import audit_daily_records
+from etf_backtesting.data.audit import audit_daily_records, summarize_findings
 
 
 class FreeStockDBAdapter:
@@ -63,7 +63,8 @@ class FreeStockDBAdapter:
             desc=False,
             as_df=False,
         )
-        return [self._to_price_bar(symbol, item) for item in records or []]
+        bars = [self._to_price_bar(symbol, item) for item in records or []]
+        return sorted(bars, key=lambda item: item.trade_date)
 
     def read_adjustment_factors(self, symbol: str) -> list[dict[str, object]]:
         """Expose SDK-preloaded cumulative factors without guessing their semantics."""
@@ -113,7 +114,7 @@ class FreeStockDBAdapter:
                 "factor_semantics_verified": True,
                 "source": self.SOURCE_NAME,
             })
-        return output
+        return sorted(output, key=lambda item: str(item["trade_date"]))
 
     def read_cash_dividends(self, symbol: str) -> None:
         """The inspected public SDK does not expose a documented cash-dividend API."""
@@ -141,6 +142,7 @@ class FreeStockDBAdapter:
         findings = audit_daily_records(symbol, raw_records)
         return {
             "symbol": symbol,
+            "data_quality_summary": summarize_findings(findings),
             "data_quality_findings": [
                 {
                     "status": finding.status.value,
