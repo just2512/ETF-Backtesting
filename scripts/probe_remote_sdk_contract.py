@@ -90,7 +90,7 @@ def _sample_payload(raw: Any) -> dict[str, object]:
                 }
 
     return {
-        "status": "PASS" if row_count else "MISSING",
+        "status": "PASS" if row_count and names else "MISSING" if not row_count else "UNKNOWN",
         "python_type": type(raw).__name__,
         "row_count": row_count,
         "columns": names,
