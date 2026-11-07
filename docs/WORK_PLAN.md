@@ -56,9 +56,8 @@
 - `work/data-audit`
 - `work/index-overlap`
 - `work/backtest-engine`
-- `work/strategy-dca`
-- `work/strategy-bollinger`
-- `work/strategy-cash-pool`
+
+A/B/C/D策略作为 `work/backtest-engine` 内的独立模块，不再额外创建策略分支。
 
 这些是建议命名，不要求一次全部创建。先从互不冲突的模块启动；如果只有单人/单个执行代理，多个分支并不等于真实并行算力，应按独立文件边界分派任务，避免同文件并发修改。
 
