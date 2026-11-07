@@ -40,12 +40,13 @@ SDK 的 `StockDBClient` 会尝试读取 `复权*` 表并构造 `_fq_dates` / `_f
 
 ```powershell
 python -m pip install -e .
+$env:PYTHONPATH = "C:\\path\\to\\free-stockdb\\pybao;$env:PYTHONPATH"
 $env:FREESTOCKDB_HOST = "127.0.0.1"
 $env:FREESTOCKDB_PORT = "7899"
 python scripts/probe_free_stockdb.py
 ```
 
-若 SDK 不在 Python 模块搜索路径中，应先按 free-stockdb 自带安装说明配置 Python 环境；不要把密码写入仓库或命令历史。将生成的 JSON 结果保存到本地并提供给项目审计流程。
+若 SDK 不在 Python 模块搜索路径中，应先按 free-stockdb 自带安装说明配置 Python 环境；不要把密码写入仓库或命令历史。探测JSON包含行情覆盖摘要、OHLC质量检查和复权因子状态。若无权威交易日历，交易日完整性会保持UNKNOWN。将生成的 JSON 结果保存到本地并提供给项目审计流程。
 
 ## 当前审计结论
 
