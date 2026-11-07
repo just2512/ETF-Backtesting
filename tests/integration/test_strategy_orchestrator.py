@@ -249,6 +249,7 @@ def test_formal_strategy_run_uses_dated_quotes_and_limit_context() -> None:
         initial_cash=Decimal("10000"),
         costs=free_costs(),
         dividend_status="PASS",
+        dividend_snapshot_sha256="a" * 64,
         execution_rules_status="PASS",
         execution_model=ExecutionModel(Decimal("0"), Decimal("0")),
         execution_contexts={(DAYS[1], "510300"): context},
