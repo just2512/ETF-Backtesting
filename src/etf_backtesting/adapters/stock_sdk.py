@@ -162,7 +162,7 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose get_trade_days()")
         result = getter(start_date=start, end_date=end)
         days = []
-        for value in result or []:
+        for value in (() if result is None else result):
             if isinstance(value, datetime):
                 days.append(value.date())
             elif isinstance(value, date):
