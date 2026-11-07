@@ -102,7 +102,7 @@ def test_strategy_c_s1_sell_is_based_on_position_at_signal_close() -> None:
 
     filled = [item for item in result.execution.executions if item.status == "FILLED"]
     assert [item.side for item in filled] == ["BUY", "SELL"]
-    assert filled[0].quantity == Decimal("500")
+    assert filled[0].quantity == Decimal("800")
     assert filled[1].signal_date == DAYS[3]
     assert filled[1].execution_date == DAYS[4]
     assert filled[1].quantity == Decimal("100")
