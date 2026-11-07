@@ -28,7 +28,22 @@ def test_accumulator_triggers_each_tier_once_and_resets_at_middle_band() -> None
 def test_upper_band_seller_triggers_once_until_reentry() -> None:
     strategy = BollingerUpperBandSeller()
     day = date(2024, 1, 2)
-    assert strategy.on_close("510300", day, 1.1)
-    assert not strategy.on_close("510300", day, 1.2)
-    assert not strategy.on_close("510300", day, 0.9)
-    assert strategy.on_close("510300", day, 1.1)
+    assert strategy.on_close("510300", day, 1.1).fraction_of_current_position == 0.2
+    assert strategy.on_close("510300", day, 1.2) is None
+    assert strategy.on_close("510300", day, 0.9) is None
+    assert strategy.on_close("510300", day, 1.1).fraction_of_current_position == 0.2
+
+
+
+def test_exit_modes_cover_hold_and_two_stage_sell() -> None:
+    hold = BollingerUpperBandSeller(mode="S0")
+    assert hold.on_close("510300", date(2024, 1, 2), 1.2) is None
+
+    staged = BollingerUpperBandSeller(mode="S2")
+    day = date(2024, 1, 2)
+    assert staged.on_close("510300", day, 1.1) is None
+    first = staged.on_close("510300", day, 0.9)
+    assert first is not None and first.fraction_of_current_position == 0.1
+    assert staged.on_close("510300", day, 0.8) is None
+    second = staged.on_close("510300", day, 0.5)
+    assert second is not None and second.fraction_of_current_position == 0.1
