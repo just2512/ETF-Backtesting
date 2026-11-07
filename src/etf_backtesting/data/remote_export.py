@@ -74,7 +74,7 @@ def export_snapshot(
                 symbol_results.append({
                     "symbol": symbol,
                     "status": "MISSING",
-                    "error": "online get_price returned no daily bars",
+                    "error": "remote history API returned no daily bars",
                     "daily_bar_count": 0,
                     "first_date": None,
                     "last_date": None,
@@ -157,6 +157,7 @@ def export_snapshot(
     manifest: dict[str, object] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": StockSDKAdapter.SOURCE_NAME,
+        "history_api": adapter.history_api,
         "price_basis": "UNADJUSTED",
         "fq": None,
         "frequency": "daily",
