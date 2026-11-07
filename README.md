@@ -45,7 +45,16 @@
 
 ## 数据源边界
 
-计划将用户的 `just2512/free-stockdb` 作为候选行情数据源，通过适配层接入。本项目不假定该仓库已包含完整数据，也不假定其数据源授权、历史覆盖和字段契约已通过核验。必须先审计用户 fork 的实际代码、配置与本地数据。
+支持两种 free-stockdb 接入形态：本机 LevelDB 服务（本地适配器）与用户提供的远程 `stock_sdk` 双端服务（远程适配器）。远程日线通过 `rd.get_data(..., fq=None)` 读取不复权 OHLCV；在线财务与 Tick 仅作为补充数据。服务地址通过环境变量配置，不写入仓库。项目不假定任一服务已具备完整历史数据、有效复权因子、分红事件或历史指数成分权重；必须先运行本机覆盖探测并核验字段和数据语义。详见 [数据源审计](docs/FREE_STOCKDB_SOURCE_AUDIT.md)。
+
+远程 SDK 覆盖探测（在安装了 `stock_sdk` 的本机执行）：
+
+```powershell
+$env:STOCKSDK_HOST = "<init() 使用的主机>"
+$env:STOCKSDK_PORT = "7899"
+$env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
+python scripts/probe_stock_sdk.py
+```
 
 ## 关键原则
 
