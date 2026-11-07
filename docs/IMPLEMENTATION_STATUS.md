@@ -34,7 +34,7 @@
 
 ### 尚未完成
 
-- 用户本机 free-stockdb 服务与真实数据覆盖探测；
+- 用户本机 free-stockdb 服务与真实数据覆盖探测：本机探测已 2026-11-07 完成，见 [FREE_STOCKDB_SOURCE_AUDIT.md](FREE_STOCKDB_SOURCE_AUDIT.md)；但 510300/159928 全史仍待补齐。
 - 分红事件数据源及逐笔核验；
 - 历史指数成分和历史权重数据源；
 - 接入真实交易日历数据并对五只ETF逐只完成缺口审计；
@@ -45,20 +45,18 @@
 
 ## free-stockdb 当前结论
 
-静态源码审计已完成，详见 [FREE_STOCKDB_SOURCE_AUDIT.md](FREE_STOCKDB_SOURCE_AUDIT.md)。
+静态源码审计已完成，详见 [FREE_STOCKDB_SOURCE_AUDIT.md](FREE_STOCKDB_SOURCE_AUDIT.md)；本机真实数据探测已于 2026-11-07 完成（`python scripts/probe_free_stockdb.py`，退出码 0），结果见同一文档「本机探测结果」。
 
-- 日K/分钟K查询：接口能力 PASS。
-- 五只ETF实际本地行情覆盖：UNKNOWN。
-- 复权因子实际覆盖和语义：UNKNOWN。
+- 日K/分钟K查询：接口能力 PASS，本机 127.0.0.1:7899 实测可读五只ETF日线。
+- 五只ETF实际本地行情覆盖：已探测；510880/513020/159611 覆盖完整，510300/159928 仅 2024-01-02 起、历史不全。
+- 复权因子实际覆盖：已探测（510300=14 / 510880=19 / 513020=0 / 159928=1 / 159611=0）；语义仍 UNVERIFIED。
 - 现金分红事件接口：当前已检查SDK中 MISSING。
 - 带生效日期的历史指数成分/权重接口：当前已检查SDK中 MISSING。
-- GitHub仓库不包含本地 `data/` 和 LevelDB 文件；`sync_url.txt` 当前无有效源配置。
-
-必须在用户运行 free-stockdb 的本机执行 `python scripts/probe_free_stockdb.py`，才能确认实际数据覆盖。云端GitHub不能读取用户本机的 `127.0.0.1:7899` 或被忽略的本地数据目录。
+- GitHub仓库不包含本地 `data/` 和 LevelDB 文件；`sync_url.txt` 当前无有效源配置；探测JSON保存在本地 `reports/audit/`（被 .gitignore 排除，不入库）。
 
 ## 下一阶段
 
-1. 在用户本机运行free-stockdb探测脚本，确认五只ETF真实覆盖、因子数量和OHLC质量。
+1. ~~在用户本机运行free-stockdb探测脚本~~ 已完成；下一步针对 510300/159928 补齐 2012/2013 起的历史日线（重跑 `数据更新.exe` 完整同步并核验，或确认数据源历史窗口），并核验 513020/159611 复权因子=0 是否确为无分红所致。
 2. 核验交易日历、ETF分红公告、历史指数成分/权重来源及其授权。
 3. 完成涨跌停、滑点、价差和券商费用规则的成交模拟。
 4. 补齐A/B/C/D完整策略编排、资金流收益计算和滚动/敏感性报告。
