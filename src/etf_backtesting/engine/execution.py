@@ -172,6 +172,19 @@ class ExecutionEngine:
         if bar.symbol != order.symbol or bar.trade_date != order.execution_date:
             return self._result(order, "REJECTED", reason="execution bar does not match order")
         if bar.trade_status != "NORMAL":
+            if self.execution_model is not None and self.execution_model.require_market_context:
+                if market_context is None or market_context.suspended is None:
+                    return self._result(
+                        order, "NO_FILL", reason="suspension status unknown for non-normal bar"
+                    )
+                if market_context.suspended is False:
+                    return self._result(
+                        order, "REJECTED",
+                        reason="bar trade status conflicts with tradable market context",
+                    )
+                return self._result(
+                    order, "NO_FILL", reason=f"market context reports suspension ({bar.trade_status})"
+                )
             return self._result(order, "NO_FILL", reason=f"trade status is {bar.trade_status}")
         if order.quantity % self.lot_size != 0:
             return self._result(order, "REJECTED", reason="quantity is not a whole trading lot")
