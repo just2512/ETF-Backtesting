@@ -77,6 +77,44 @@ class FreeStockDBAdapter:
             for day, value in zip(dates, values, strict=True)
         ]
 
+    def read_indicator_close_records(
+        self,
+        symbol: str,
+        start: str | None = None,
+        end: str | None = None,
+        factor_semantics_verified: bool = False,
+    ) -> list[dict[str, object]]:
+        """Read vendor QFQ closes only after factor semantics have been independently verified."""
+        if not factor_semantics_verified:
+            raise ValueError("adjustment-factor semantics must be independently verified first")
+        if not self.read_adjustment_factors(symbol):
+            raise ValueError(f"no adjustment-factor records available for {symbol}")
+        records = self.client.get_data(
+            code=symbol,
+            start=start,
+            end=end,
+            frequency="1d",
+            fq="qfq",
+            desc=False,
+            as_df=False,
+        )
+        output = []
+        for record in records or []:
+            raw_date = str(record.get("date", ""))
+            if len(raw_date) != 8 or not raw_date.isdigit():
+                raise ValueError(f"invalid adjusted daily date for {symbol}: {raw_date!r}")
+            if record.get("close") is None:
+                raise ValueError(f"missing adjusted close for {symbol} on {raw_date}")
+            output.append({
+                "symbol": symbol,
+                "trade_date": raw_date,
+                "adjusted_close": float(record["close"]),
+                "price_basis": "VENDOR_QFQ",
+                "factor_semantics_verified": True,
+                "source": self.SOURCE_NAME,
+            })
+        return output
+
     def read_cash_dividends(self, symbol: str) -> None:
         """The inspected public SDK does not expose a documented cash-dividend API."""
         del symbol
