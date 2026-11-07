@@ -338,8 +338,16 @@ class StrategyBacktestRunner:
             lot_size=self.lot_size,
             **strategy_options,
         )
+        minimum_reserve = (
+            strategy_options.get("reserve_cash", Decimal("0"))
+            if strategy == "D"
+            else Decimal("0")
+        )
         execution = PortfolioBacktestRunner(
-            ExecutionEngine(lot_size=self.lot_size)
+            ExecutionEngine(
+                lot_size=self.lot_size,
+                minimum_cash_reserve=minimum_reserve,
+            )
         ).run(
             bars_by_symbol,
             (),
