@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import importlib
 import os
+from collections.abc import Iterable
 from datetime import date
-from typing import Any, Iterable
+from typing import Any
 
 from etf_backtesting.contracts import PriceBar
 
@@ -30,10 +31,10 @@ class FreeStockDBAdapter:
         port: int = 7899,
         password: str = "",
         sdk_module: str = "stock_sdk",
-    ) -> "FreeStockDBAdapter":
+    ) -> FreeStockDBAdapter:
         """Import the installed SDK and connect to the local service."""
         module = importlib.import_module(sdk_module)
-        client_type = getattr(module, "StockDBClient")
+        client_type = module.StockDBClient
         return cls(client_type(host=host, port=port, password=password))
 
     @classmethod
@@ -78,12 +79,10 @@ class FreeStockDBAdapter:
     def read_cash_dividends(self, symbol: str) -> None:
         """The inspected public SDK does not expose a documented cash-dividend API."""
         del symbol
-        return None
 
     def read_historical_index_constituents(self, index_id: str) -> None:
         """The inspected public SDK does not expose dated historical index constituents."""
         del index_id
-        return None
 
     def probe_symbol(self, symbol: str) -> dict[str, object]:
         bars = self.read_daily_bars(symbol)
