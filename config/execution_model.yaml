@@ -1,0 +1,9 @@
+# No slippage, impact, or spread value is inferred from OHLCV.
+# Populate from an explicit historical quote source and a documented calibration.
+slippage_bps: null
+market_impact_bps: null
+max_spread_bps: null
+require_market_context: true
+require_quotes: true
+require_limit_status: true
+status: "REQUIRES_HISTORICAL_QUOTES_AND_EXECUTION_CALIBRATION"
