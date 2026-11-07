@@ -176,3 +176,11 @@
 - 某ETF没有分红事件，不再自动等于零分红；只有该ETF完整覆盖证明存在且通过校验，才允许在该区间认定未发现事件。
 - 导入器生成事件+覆盖双文件组合SHA-256；正式回测 `dividend_status=PASS` 必须传入该哈希，且每条事件都带公告来源元数据。
 - 报告将记录分红快照哈希。当前没有真实官方公告事件/覆盖文件，分红门禁仍 MISSING；导入器和门禁已实现，未伪造任何事件。
+
+
+### 对照公开 sdk_test.py 的历史行情接口
+
+- 已读取 `just2512/free-stockdb/调用方式/python/sdk_test.py`：其批量历史行情示例实际调用 `rd.get_data(code, start, end, frequency="1d", fq=...)`，而不是模块级 `get_price`；原生范围查询使用 `rd.get()`。
+- 适配器现优先使用用户此前实测的在线 `get_price(..., fq=None)`；当该函数不存在时，支持 `rd.get_data(..., fq=None, as_df=True)`。若仅有 `rd.get_data` 且 7899 原生初始化失败，会明确报错，不假装在线API可用。
+- SDK探测脚本同时记录模块级接口与 `rd.get/rd.get_data` 的真实签名。
+- 不复权参数在两条路径都显式设置为 `fq=None`，不沿用 sdk_test.py 示例中的 `qfq`。
