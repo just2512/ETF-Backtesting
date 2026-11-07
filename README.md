@@ -65,7 +65,15 @@ $env:STOCKSDK_ONLINE_ENDPOINT = "106.75.217.246:12328"
 python scripts/export_remote_history.py
 ```
 
-默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
+默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。某只 ETF 拉取失败不会丢弃其他成功结果；空交易日历或日历接口异常必须标记 UNKNOWN。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
+
+历史指数成分/权重快照导出（权重字段和单位必须先从 SDK 实际返回值确认，禁止自动猜测）：
+
+```powershell
+python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30 2021-06-30 --symbol-field <实际证券代码字段> --weight-field <实际权重字段> --weight-scale percent
+```
+
+若 API 返回的权重是 0.0–1.0 的小数比例，将 `--weight-scale` 改为 `fraction`。导入器会拒绝字段缺失、成分重复、非正权重和权重合计不在 100% 容差内的数据；不会把不完整成分列表自动归一化。每个历史日期独立写 CSV 与 SHA-256，失败日期保留在 manifest 中。
 
 ## 关键原则
 
