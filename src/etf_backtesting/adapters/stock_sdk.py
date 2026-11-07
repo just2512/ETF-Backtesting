@@ -183,9 +183,12 @@ class StockSDKAdapter:
     def read_trade_days(self, start: str, end: str) -> list[date]:
         """Read the authoritative online trading calendar for a bounded interval."""
         self._validate_range(start, end)
-        getter = getattr(self.sdk, "get_trade_days", None)
+        calendar_api = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
+        getter = getattr(self.sdk, calendar_api, None)
         if not callable(getter):
-            raise TypeError("stock_sdk module must expose get_trade_days()")
+            raise TypeError(
+                f"stock_sdk module must expose configured trading-calendar API {calendar_api}()"
+            )
         result = getter(start_date=start, end_date=end)
         days = []
         for value in (() if result is None else result):
@@ -202,9 +205,12 @@ class StockSDKAdapter:
 
     def read_history_constituents(self, index_id: str, as_of: date) -> Any:
         """Return the provider's dated historical index constituent/weight snapshot."""
-        getter = getattr(self.sdk, "get_history_constituents", None)
+        index_api = os.getenv("STOCKSDK_INDEX_API", "get_history_constituents")
+        getter = getattr(self.sdk, index_api, None)
         if not callable(getter):
-            raise TypeError("stock_sdk module must expose get_history_constituents()")
+            raise TypeError(
+                f"stock_sdk module must expose configured historical-index API {index_api}()"
+            )
         if not index_id:
             raise ValueError("index_id must not be empty; include the provider exchange suffix")
         return getter(index_id, date=as_of.isoformat())
