@@ -7,7 +7,6 @@ from decimal import Decimal, ROUND_DOWN
 
 from etf_backtesting.engine.execution import OrderIntent
 from etf_backtesting.strategies.bollinger_accumulate import SellSignal
-from etf_backtesting.strategies.fixed_dca import CashBudgetSignal
 
 
 def budget_to_buy_order(
