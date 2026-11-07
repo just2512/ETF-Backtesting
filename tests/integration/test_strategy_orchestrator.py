@@ -17,20 +17,24 @@ DAYS = [
 ]
 
 
-def bars(symbol: str, closes: list[float]) -> list[PriceBar]:
+def bars(
+    symbol: str,
+    closes: list[float],
+    opens: list[float] | None = None,
+) -> list[PriceBar]:
     return [
         PriceBar(
             symbol=symbol,
             trade_date=day,
-            open=close,
-            high=close + 0.2,
-            low=close - 0.2,
+            open=close if opens is None else opens[index],
+            high=max(close, close if opens is None else opens[index]) + 0.2,
+            low=min(close, close if opens is None else opens[index]) - 0.2,
             close=close,
             volume=100000,
             amount=close * 100000,
             source="fixture",
         )
-        for day, close in zip(DAYS, closes, strict=False)
+        for index, (day, close) in enumerate(zip(DAYS, closes, strict=True))
     ]
 
 
@@ -109,11 +113,11 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
     result = StrategyBacktestRunner(lot_size=100).run(
         "D",
         {
-            "510300": bars("510300", [10, 10, 4, 4, 4]),
-            "159928": bars("159928", [10, 10, 4, 4, 4]),
+            "510300": bars("510300", [10, 10, 4, 4, 4], [10, 10, 10, 4, 4]),
+            "159928": bars("159928", [10, 8, 4, 4, 4]),
         },
         DAYS,
-        initial_cash=Decimal("2500"),
+        initial_cash=Decimal("5000"),
         costs=free_costs(),
         dividend_status="UNKNOWN",
         execution_rules_status="UNKNOWN",
@@ -126,16 +130,18 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
             "510300": Decimal("100000"),
             "159928": Decimal("100000"),
         },
-        reserve_cash=Decimal("500"),
+        reserve_cash=Decimal("1000"),
         bollinger_period=3,
         bollinger_deviations=1.0,
     )
 
-    filled = [item for item in result.execution.executions if item.status == "FILLED"]
-    assert len(filled) == 1
-    assert filled[0].symbol == "159928"
-    assert result.execution.ledger.cash == Decimal("500")
-    assert sum(result.execution.ledger.positions.values()) == Decimal("500")
+    executions = result.execution.executions
+    assert [item.symbol for item in executions] == ["510300", "159928"]
+    assert [item.status for item in executions] == ["REJECTED", "FILLED"]
+    assert "allocated cash budget" in (executions[0].reason or "")
+    assert result.execution.ledger.cash == Decimal("3000")
+    assert result.execution.ledger.positions["159928"] == Decimal("500")
+    assert result.execution.ledger.positions.get("510300", Decimal("0")) == 0
 
 
 def test_formal_strategy_run_fails_closed_on_missing_dividends_or_execution_rules() -> None:
