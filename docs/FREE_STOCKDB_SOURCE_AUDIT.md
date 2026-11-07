@@ -98,3 +98,17 @@ OHLC/重复日期/字段完整性：五只全部 PASS，无 REJECT；交易日�
 5. 分红事件接口与复权因子语义同样未完成字段级及事件级验证，维持 UNKNOWN / UNVERIFIED。
 
 本机验证可通过 StockSDKAdapter.from_environment() 初始化，并对 510300、510880、513020、159928、159611 调用 probe_universe()。服务地址只通过环境变量配置：STOCKSDK_HOST、STOCKSDK_PORT、STOCKSDK_ONLINE_ENDPOINT；不要提交真实地址或凭据到仓库。
+
+
+### stock_sdk 本机覆盖探测命令
+
+在安装了 SDK 的 Windows 环境中，先配置双端地址（值沿用用户本机实际可用的 init() 与 set_init() 参数；不要将其写入仓库）：
+
+```powershell
+$env:STOCKSDK_HOST = "<init() 使用的主机>"
+$env:STOCKSDK_PORT = "7899"
+$env:STOCKSDK_ONLINE_ENDPOINT = "<set_init() 使用的 host:port>"
+python scripts/probe_stock_sdk.py --output reports/audit/stock_sdk_probe.json
+```
+
+脚本默认探测 510300、510880、513020、159928、159611；可用 --symbols 覆盖。JSON 会记录每只 ETF 的观察到的日线根数、首末日期和 OHLC 审计结果。交易日历完整性、复权因子语义、分红事件与历史指数成分/权重不会因为接口连通而自动变成 PASS，仍按 UNKNOWN / UNVERIFIED 保留。`reports/audit/` 已在 .gitignore 中排除，不会把本地数据报告提交到 Git。
