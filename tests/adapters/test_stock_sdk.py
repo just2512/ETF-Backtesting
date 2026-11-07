@@ -184,7 +184,7 @@ def test_rd_get_data_is_supported_as_unadjusted_history_fallback():
 
 def test_rd_get_data_fallback_reports_native_init_failure_without_using_local_data():
     sdk = FakeSDK()
-    del sdk.get_price
+    sdk.get_price = None
     sdk.rd = FakeNativeRDWithData()
 
     def fail_native_init(host, port):
