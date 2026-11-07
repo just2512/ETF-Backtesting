@@ -7,7 +7,7 @@ import csv
 import hashlib
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +15,13 @@ from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
 
 
 DEFAULT_SYMBOLS = ("510300", "510880", "513020", "159928", "159611")
+DEFAULT_LISTING_DATES = {
+    "510300": date(2012, 5, 28),
+    "510880": date(2007, 1, 18),
+    "513020": date(2022, 2, 8),
+    "159928": date(2013, 9, 16),
+    "159611": date(2022, 1, 7),
+}
 BAR_FIELDS = (
     "symbol",
     "trade_date",
@@ -63,13 +70,28 @@ def export_snapshot(
     adapter: StockSDKAdapter,
     symbols: list[str],
     output_dir: Path,
+    *,
+    start: str = "20000101",
+    end: str | None = None,
+    expected_first_dates: dict[str, date] | None = None,
 ) -> dict[str, object]:
-    """Export each symbol independently and preserve partial failures in the manifest."""
+    """Export one symbol per request over an explicit full-history date window."""
+    if len(start) != 8 or not start.isdigit():
+        raise ValueError("start must use YYYYMMDD")
+    if end is None:
+        end = date.today().strftime("%Y%m%d")
+    if len(end) != 8 or not end.isdigit() or start > end:
+        raise ValueError("end must use YYYYMMDD and must not precede start")
+    expected_dates = (
+        DEFAULT_LISTING_DATES if expected_first_dates is None else expected_first_dates
+    )
+    requested_start = date(int(start[:4]), int(start[4:6]), int(start[6:8]))
+    requested_end = date(int(end[:4]), int(end[4:6]), int(end[6:8]))
     symbol_results: list[dict[str, object]] = []
     all_bars: dict[str, list[Any]] = {}
     for symbol in symbols:
         try:
-            bars = adapter.read_daily_bars(symbol)
+            bars = adapter.read_daily_bars(symbol, start, end)
             if not bars:
                 symbol_results.append({
                     "symbol": symbol,
@@ -84,6 +106,17 @@ def export_snapshot(
                 continue
             bars = sorted(bars, key=lambda bar: bar.trade_date)
             all_bars[symbol] = bars
+            expected_first = expected_dates.get(symbol)
+            if expected_first is not None and requested_start > expected_first:
+                expected_first = None
+            first_date_status = "NOT_CONFIGURED"
+            if expected_first is not None:
+                if bars[0].trade_date == expected_first:
+                    first_date_status = "PASS"
+                elif bars[0].trade_date > expected_first:
+                    first_date_status = "UNKNOWN"
+                else:
+                    first_date_status = "REJECT"
             file_path = output_dir / f"{symbol}.csv"
             digest = _write_symbol_csv(file_path, symbol, bars)
             symbol_results.append({
@@ -94,6 +127,17 @@ def export_snapshot(
                 "daily_bar_count": len(bars),
                 "first_date": bars[0].trade_date.isoformat(),
                 "last_date": bars[-1].trade_date.isoformat(),
+                "requested_start": start,
+                "requested_end": end,
+                "expected_first_date": (
+                    expected_first.isoformat() if expected_first is not None else None
+                ),
+                "first_date_status": first_date_status,
+                "history_coverage_status": (
+                    "REJECT" if first_date_status == "REJECT"
+                    else "UNKNOWN" if first_date_status == "UNKNOWN"
+                    else "PASS"
+                ),
                 "calendar_completeness": "UNKNOWN",
                 "unclassified_calendar_sessions": [],
             })
@@ -113,8 +157,8 @@ def export_snapshot(
     populated = list(all_bars.values())
     calendar_error: dict[str, str] | None = None
     if populated:
-        calendar_start = min(bars[0].trade_date for bars in populated).strftime("%Y%m%d")
-        calendar_end = max(bars[-1].trade_date for bars in populated).strftime("%Y%m%d")
+        calendar_start = start
+        calendar_end = end
         try:
             trade_days = adapter.read_trade_days(calendar_start, calendar_end)
             if not trade_days:
@@ -143,11 +187,13 @@ def export_snapshot(
             continue
         expected = [
             day for day in trade_days
-            if bars[0].trade_date <= day <= bars[-1].trade_date
+            if bars[0].trade_date <= day <= requested_end
         ]
         observed = {bar.trade_date for bar in bars}
         gaps = sorted(set(expected) - observed)
         result["calendar_completeness"] = "PASS" if not gaps else "UNKNOWN"
+        if result.get("first_date_status") in ("UNKNOWN", "REJECT"):
+            result["history_coverage_status"] = result["first_date_status"]
         # A missing bar on a trading day may be a suspension or a data defect.
         # Without an authoritative per-symbol status endpoint, do not classify it.
         result["unclassified_calendar_sessions"] = [
@@ -156,6 +202,8 @@ def export_snapshot(
 
     manifest: dict[str, object] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "requested_start": start,
+        "requested_end": end,
         "source": StockSDKAdapter.SOURCE_NAME,
         "history_api": adapter.history_api,
         "price_basis": "UNADJUSTED",
@@ -177,6 +225,8 @@ def export_snapshot(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--symbols", nargs="+", default=list(DEFAULT_SYMBOLS))
+    parser.add_argument("--start", default="20000101")
+    parser.add_argument("--end", default=date.today().strftime("%Y%m%d"))
     parser.add_argument(
         "--output",
         default="data/snapshots/remote-stock-sdk",
@@ -186,7 +236,10 @@ def main() -> int:
 
     try:
         adapter = StockSDKAdapter.from_environment()
-        manifest = export_snapshot(adapter, args.symbols, Path(args.output))
+        manifest = export_snapshot(
+            adapter, args.symbols, Path(args.output),
+            start=args.start, end=args.end,
+        )
     except Exception as exc:
         print(
             f"remote snapshot export failed: {type(exc).__name__}: {exc}",
@@ -196,12 +249,18 @@ def main() -> int:
 
     results = manifest["symbols"]
     missing = any(item["status"] == "MISSING" for item in results)
+    rejected = any(
+        item["status"] == "REJECT" or item.get("history_coverage_status") == "REJECT"
+        for item in results
+    )
     unknown = any(
-        item["status"] == "UNKNOWN" or item["calendar_completeness"] != "PASS"
+        item["status"] == "UNKNOWN"
+        or item["calendar_completeness"] != "PASS"
+        or item.get("history_coverage_status") == "UNKNOWN"
         for item in results
     ) or manifest["calendar_status"] != "PASS"
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
-    return 3 if missing else 4 if unknown else 0
+    return 5 if rejected else 3 if missing else 4 if unknown else 0
 
 
 if __name__ == "__main__":

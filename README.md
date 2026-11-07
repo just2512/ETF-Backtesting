@@ -67,10 +67,10 @@ python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-0
 $env:STOCKSDK_HOST = "106.75.217.246"
 $env:STOCKSDK_PORT = "7899"
 $env:STOCKSDK_ONLINE_ENDPOINT = "106.75.217.246:12328"
-python scripts/export_remote_history.py
+python scripts/export_remote_history.py --start 20000101
 ```
 
-默认将五只候选 ETF 的不复权日线写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。某只 ETF 拉取失败不会丢弃其他成功结果；空交易日历或日历接口异常必须标记 UNKNOWN。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
+默认从 2000-01-01 拉取至指定结束日（默认运行日），逐只请求五只ETF的不复权全史日线；并核验已知上市首日。任何首日缺失、日历缺口或未知证券上市日期都会让覆盖门禁保持 UNKNOWN。数据写入 `data/snapshots/remote-stock-sdk/`，并生成包含每只证券记录数、首末日期、SHA-256 和交易日历缺口的 `manifest.json`。某只 ETF 拉取失败不会丢弃其他成功结果；空交易日历或日历接口异常必须标记 UNKNOWN。数据快照目录已被 Git 忽略。日历缺口暂标记为 UNKNOWN，因为缺少逐证券停牌状态时不能把缺K线直接判定为数据错误或停牌。
 
 远程 SDK 原始接口/历史指数返回结构探测（只访问在线接口，不读取本地 LevelDB）：
 
