@@ -130,7 +130,7 @@ def test_strategy_d_uses_shared_cash_pool_and_preserves_reserve() -> None:
 
     filled = [item for item in result.execution.executions if item.status == "FILLED"]
     assert len(filled) == 1
-    assert filled[0].symbol == "159928" or filled[0].symbol == "510300"
+    assert filled[0].symbol == "159928"
     assert result.execution.ledger.cash == Decimal("500")
     assert sum(result.execution.ledger.positions.values()) == Decimal("500")
 
