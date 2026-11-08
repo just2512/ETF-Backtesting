@@ -40,8 +40,10 @@ class StockSDKAdapter:
             raise TypeError(
                 "stock_sdk must expose get_price() or rd.get_data() for historical daily bars"
             )
-        if not host or not online_endpoint or port < 1 or port > 65535:
-            raise ValueError("valid host, port, and online_endpoint are required")
+        if not online_endpoint:
+            raise ValueError("online_endpoint is required")
+        if initialize_native and (not host or port < 1 or port > 65535):
+            raise ValueError("valid host and port are required when native initialization is enabled")
 
         self.sdk = sdk
         self.host = host
@@ -78,20 +80,23 @@ class StockSDKAdapter:
         # NovAPI is the online provider. Its endpoint is configured by
         # set_init(); the local StockDB native channel is independent and is
         # deliberately not initialized in cloud jobs.
-        host = os.getenv("STOCKSDK_HOST", "127.0.0.1")
-        port_text = os.getenv("STOCKSDK_PORT", "7899")
-        endpoint = os.getenv(
-            "STOCKSDK_ONLINE_ENDPOINT", "106.75.217.246:12328"
-        )
-        try:
-            port = int(port_text)
-        except ValueError as exc:
-            raise ValueError("STOCKSDK_PORT must be an integer") from exc
-        sdk_module = os.getenv("STOCKSDK_MODULE", "stock_sdk")
-        sdk = importlib.import_module(sdk_module)
         initialize_native = os.getenv(
             "STOCKSDK_INIT_NATIVE", "false"
         ).lower() in {"1", "true", "yes"}
+        host = os.getenv("STOCKSDK_HOST", "127.0.0.1")
+        if initialize_native:
+            try:
+                port = int(os.getenv("STOCKSDK_PORT", "7899"))
+            except ValueError as exc:
+                raise ValueError("STOCKSDK_PORT must be an integer") from exc
+        else:
+            # Ignore the local native port entirely in cloud-only mode.
+            port = 7899
+        endpoint = os.getenv(
+            "STOCKSDK_ONLINE_ENDPOINT", "106.75.217.246:12328"
+        )
+        sdk_module = os.getenv("STOCKSDK_MODULE", "stock_sdk")
+        sdk = importlib.import_module(sdk_module)
         return cls(
             sdk,
             host,
