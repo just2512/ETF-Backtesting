@@ -1,16 +1,28 @@
 free_stockdb:
+  enabled: false
+  status: "NOT_THE_ONLINE_PROVIDER"
+  note: "Local StockDB storage/query engine is not the NovAPI online API."
+
+stock_sdk:
   enabled: true
-  transport: "HTTP"
-  endpoint_env: "STOCKSDK_ONLINE_ENDPOINT"
+  provider: "NovAPI"
+  transport: "stock_sdk.RemoteProxy"
+  online_endpoint_env: "STOCKSDK_ONLINE_ENDPOINT"
+  default_online_endpoint: "106.75.217.246:12328"
   sdk_module_env: "STOCKSDK_MODULE"
-  default_sdk_module: "etf_backtesting.adapters.free_stockdb_http_sdk"
-  native_extension_required: false
-  daily_bars_query: "cmd=get&t=日k:{symbol}:*"
+  default_sdk_module: "stock_sdk"
+  native_local_channel_required: false
+  native_init_opt_in_env: "STOCKSDK_INIT_NATIVE"
+  daily_price_api: "get_price"
   daily_price_basis: "UNADJUSTED"
-  adjustment_factor_semantics: "UNVERIFIED"
-  trading_calendar: "UNKNOWN"
-  cash_dividend_endpoint: null
-  historical_index_constituent_endpoint: null
+  daily_price_adjustment: "fq=None"
+  trading_calendar_api: "get_trade_days"
+  historical_index_constituents_api: "get_index_stocks"
+  historical_index_weights_api: "get_index_weights"
+  index_date_parameter: "date"
+  index_code_suffix_required: ".XSHG"
+  cash_dividend_events: "UNKNOWN"
+  adjustment_factor_semantics: "UNKNOWN"
 
 historical_index_data:
   provider: null
