@@ -48,24 +48,26 @@ jobs:
       - name: Probe historical index constituents and weights
         if: always() && steps.sdk_install.outcome == 'success'
         run: |
-          python scripts/probe_novapi_index_contract.py \\
-            --index-id 000300.XSHG \\
-            --dates 2020-06-30 2026-11-06 \\
+          python scripts/probe_novapi_index_contract.py \
+            --index-id 000300.XSHG \
+            --dates 2020-06-30 2026-11-06 \
             --output reports/novapi/index-api-contract.json
       - name: Import full historical index constituents and weights
         if: always() && steps.sdk_install.outcome == 'success'
         run: |
-          python scripts/export_novapi_index_history.py \\
-            --start 20220208 \\
-            --end "$(date -u +%Y%m%d)" \\
-            --retry-attempts 3 \\
-            --retry-delay-seconds 2 \\
+          python scripts/export_novapi_index_history.py \
+            --start 20220208 \
+            --end "$(date -u +%Y%m%d)" \
+            --retry-attempts 3 \
+            --retry-delay-seconds 2 \
             --output data/snapshots/remote-stock-sdk/index-history
       - name: Upload real provider responses and audit manifests
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: novapi-real-data-${{ github.run_id }}
-          path: |\n            reports/novapi/\n            data/snapshots/remote-stock-sdk/
+          path: |
+            reports/novapi/
+            data/snapshots/remote-stock-sdk/
           if-no-files-found: warn
           retention-days: 30
