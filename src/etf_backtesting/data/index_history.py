@@ -278,7 +278,11 @@ def export_index_snapshots(
     successful_snapshots: dict[date, dict[str, Decimal]] = {}
     for snapshot_date in dates:
         try:
-            raw, attempts_used, retry_errors = _retry_remote_call(\n                lambda: adapter.read_history_constituents(index_id, snapshot_date),\n                retry_attempts,\n                retry_delay_seconds,\n            )
+            raw, attempts_used, retry_errors = _retry_remote_call(
+                lambda: adapter.read_history_constituents(index_id, snapshot_date),
+                retry_attempts,
+                retry_delay_seconds,
+            )
             snapshot = normalize_index_snapshot(
                 raw,
                 index_id,
@@ -312,7 +316,10 @@ def export_index_snapshots(
                     })
             temporary.replace(file_path)
             results.append({
-                "status": "PASS",\n                "attempts": attempts_used,\n                "retry_errors": retry_errors,\n                "index_id": index_id,
+                "status": "PASS",
+                "attempts": attempts_used,
+                "retry_errors": retry_errors,
+                "index_id": index_id,
                 "snapshot_date": snapshot_date.isoformat(),
                 "constituent_count": len(snapshot.rows),
                 "input_weight_scale": weight_scale,
@@ -324,7 +331,13 @@ def export_index_snapshots(
             })
         except Exception as exc:
             results.append({
-                "status": "UNKNOWN",\n                "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1,\n                "retry_errors": [\n                    {"attempt": str(i + 1), "error_type": type(exc).__name__, "error": str(exc)}\n                    for i in range(retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1)\n                ],\n                "index_id": index_id,
+                "status": "UNKNOWN",
+                "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1,
+                "retry_errors": [
+                    {"attempt": str(i + 1), "error_type": type(exc).__name__, "error": str(exc)}
+                    for i in range(retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1)
+                ],
+                "index_id": index_id,
                 "snapshot_date": snapshot_date.isoformat(),
                 "error_type": type(exc).__name__,
                 "error": str(exc),
