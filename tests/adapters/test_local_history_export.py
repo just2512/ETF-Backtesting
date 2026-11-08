@@ -1,15 +1,17 @@
 from datetime import date
 import json
+import runpy
 
 from etf_backtesting.contracts import PriceBar
-from scripts.export_local_history import export_local_snapshot
+
+export_local_snapshot = runpy.run_path("scripts/export_local_history.py")["export_local_snapshot"]
 
 
 class FakeLocalAdapter:
     SOURCE_NAME = "local-free-stockdb"
 
     def read_daily_bars(self, symbol, start, end):
-        if symbol == "510880":
+        if symbol == "159611":
             return []
         return [
             PriceBar(
@@ -53,11 +55,11 @@ def test_local_export_writes_unadjusted_hashed_snapshot_and_keeps_calendar_unkno
 def test_local_export_preserves_missing_symbol_without_fabricating_rows(tmp_path):
     manifest = export_local_snapshot(
         FakeLocalAdapter(),
-        ["510880"],
+        ["159611"],
         tmp_path,
         "20000101",
         "20261108",
     )
     assert manifest["symbols"][0]["status"] == "MISSING"
     assert manifest["symbols"][0]["daily_bar_count"] == 0
-    assert not (tmp_path / "510880.csv").exists()
+    assert not (tmp_path / "159611.csv").exists()
