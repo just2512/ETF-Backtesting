@@ -46,4 +46,4 @@ def test_cash_pool_blocks_new_buys_when_market_value_is_already_above_cap() -> N
     result = CashPoolAllocator().allocate(Decimal("1000"), Decimal("0"), [signal])
     assert result[0].allocated_cash == Decimal("0")
     assert result[0].reason == "CAP_OR_CASH_LIMIT"
-\n
+
