@@ -57,10 +57,10 @@ not a bulk-download interface, and directs unlimited batch queries to local
 StockDB. The current test service enforces a 2,000-request quota with a
 24-hour reset. Therefore the cloud workflow does not issue daily historical
 index requests. It imports the first available session from the common
-2022-02-08 start plus each month's final trading session for the five tracking
+2022-02-08 start plus each month's final trading session plus the latest available session for the five tracking
 indices. This is a point-in-time monthly snapshot series suitable for monthly
 rebalance analysis; it does **not** establish daily index-constituent coverage.
-The manifest records `MONTH_END_PLUS_RANGE_START` and keeps daily completeness
+The manifest records `MONTH_END_PLUS_RANGE_START_AND_LATEST` and keeps daily completeness
 UNKNOWN. A full daily index history requires the provider's bulk/local StockDB
 data path or a separately authorized bulk mirror; the online supplement API
 must not be used to bypass its stated limit.
