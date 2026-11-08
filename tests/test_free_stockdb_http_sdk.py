@@ -53,3 +53,19 @@ def test_init_does_not_require_native_stockdb():
     sdk.init("127.0.0.1", 7899)
     sdk.set_init("https://stockdb.example", df=True)
     assert sdk._endpoint == "https://stockdb.example"
+
+
+def test_adapter_from_environment_needs_no_native_host(monkeypatch):
+    from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
+
+    monkeypatch.delenv("STOCKSDK_HOST", raising=False)
+    monkeypatch.delenv("STOCKSDK_PORT", raising=False)
+    monkeypatch.setenv("STOCKSDK_ONLINE_ENDPOINT", "https://stockdb.example")
+    monkeypatch.setenv(
+        "STOCKSDK_MODULE",
+        "etf_backtesting.adapters.free_stockdb_http_sdk",
+    )
+    adapter = StockSDKAdapter.from_environment()
+    assert adapter.native_init_error is None
+    assert adapter.online_endpoint == "https://stockdb.example"
+    assert adapter.history_api == "get_price"
