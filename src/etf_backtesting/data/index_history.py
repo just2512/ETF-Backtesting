@@ -464,7 +464,8 @@ def main() -> int:
             output_dir=Path(args.output),
             weight_tolerance=Decimal(args.weight_tolerance),
             retry_attempts=args.retry_attempts,
-            retry_delay_seconds=args.retry_delay_seconds,\n        )
+            retry_delay_seconds=args.retry_delay_seconds,
+        )
     except Exception as exc:
         print(f"index snapshot export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 4
