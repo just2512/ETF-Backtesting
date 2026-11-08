@@ -272,7 +272,11 @@ def main() -> int:
     output_file.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 4 if report["unresolved_indices"] or any(
-        any(item.get("status") != "PASS" for item in result["manifest"]["results"])
+        result.get("status") != "PASS"
+        or (
+            "manifest" in result
+            and any(item.get("status") != "PASS" for item in result["manifest"]["results"])
+        )
         for result in report["results"]
     ) else 0
 
