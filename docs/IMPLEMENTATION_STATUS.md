@@ -233,3 +233,17 @@
 - `config/trading_costs.yaml` 与 `config/execution_model.yaml` 仍有未确认参数为 null；不得用零费用、零滑点或 OHLC 开盘价替代真实成交规则。
 - 分红事件仍 MISSING。现有官方公告 CSV 导入器可校验事件及逐 ETF 覆盖证明，但尚未有完整的五只 ETF 官方事件/零事件覆盖数据文件。
 - 因此当前允许做的是研究性机制回测（明确 `research_only=True`）；正式策略收益结论仍 BLOCKED。
+
+
+## 2026-11-08 后续数据门禁与报告交付
+
+- PR #35：`PriceBar` 在共享数据契约入口拒绝 OHLCV 中的 NaN/Infinity；PR CI run #455：Lint PASS，pytest 129 passed。
+- PR #36：分红覆盖按每只ETF自身上市日期核验，避免用单一全局起点错误覆盖不同上市历史；PR CI run #460：Lint PASS，pytest 125 passed。
+- PR #37：新增 A/B/C（逐ETF）与 D（公共资金池）比较报告编排，生成每次运行的 report/equity/executions/ledger 文件及总览 `comparison.json`、`comparison.csv`；初次CI发现并修复子报告相对路径问题，最终 PR CI run #469：Lint PASS，pytest 132 passed。
+- 以上均为代码和模拟契约验收；不代表产生了真实行情快照或正式回测收益。
+
+### 当前阻断项保持原样
+- 远程五只ETF真实快照、逐日缺口CSV：尚未在本轮执行环境中生成。
+- 历史指数真实多日期权重快照及权重字段/单位确认：尚未生成。
+- 官方分红公告事件与逐标的完整覆盖文件：尚未生成，分红门禁仍 MISSING。
+- 历史逐日 bid/ask、涨跌停/封板、停牌状态和经确认费用参数：尚未齐备，正式执行门禁仍 UNKNOWN。
