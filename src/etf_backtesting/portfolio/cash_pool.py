@@ -52,8 +52,8 @@ class CashPoolAllocator:
         for signal in signals:
             if signal.desired_cash < 0 or signal.current_market_value < 0:
                 raise ValueError("signal cash and market values must not be negative")
-            if signal.max_market_value < signal.current_market_value:
-                raise ValueError("current market value exceeds configured ETF cap")
+            if signal.max_market_value < 0:
+                raise ValueError("configured ETF cap must not be negative")
 
         spendable = available_cash - reserve_cash
         allocations: list[CashAllocation] = []
