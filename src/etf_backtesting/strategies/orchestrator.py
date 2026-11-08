@@ -150,8 +150,10 @@ class StrategySignalOrchestrator:
         history.append(float(bar.close))
         if len(history) < self.bollinger_period:
             return None
+        # Only the newest rolling window is needed. Recomputing every historical
+        # Bollinger point on every session made full-history backtests quadratic.
         point = bollinger_bands(
-            history,
+            history[-self.bollinger_period :],
             period=self.bollinger_period,
             deviations=self.bollinger_deviations,
         )[-1]
