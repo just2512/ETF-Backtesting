@@ -207,3 +207,29 @@
 - 新增 `calendar_gaps.csv`：逐只ETF列出交易日历中缺失的日期，标记 `UNCLASSIFIED` 并说明缺少逐证券停牌状态；manifest 同时记录该文件 SHA-256 和行数。
 - 历史指数导出新增 `temporal_diff.csv`：对相邻成功快照逐项列出成分新增、剔除及权重变化；多日期快照没有差异时，历史日期语义保持 UNKNOWN。
 - 这些改动只完善数据导入和审计代码；没有将 CI 模拟 SDK 测试描述为真实远程导出，也没有生成虚假的行情/指数快照。
+
+
+## 2026-11-08 远程数据与回测状态复核
+
+### CI 与代码合并
+- PR #23 已合并；PR 检查 run #251（commit `c31e9ed`）：Lint PASS，pytest 76 passed。
+- PR #34 已合并；修复全史覆盖 UNKNOWN 门禁、生成逐日 `calendar_gaps.csv`、生成历史指数快照 `temporal_diff.csv`。
+- PR #34 检查 run #449：Lint PASS，pytest 123 passed；合并后 main run #450：Lint PASS，pytest 123 passed。
+
+### 真实远程数据状态
+- 远程五只 ETF 的历史根数和首日，仍以用户 2026-11-07 提供的远程实测记录为证据；GitHub Actions 的测试使用模拟 SDK，不是在线数据下载。
+- 当前仓库没有真实 `data/snapshots/remote-stock-sdk/manifest.json`、五只 ETF CSV 或真实 `calendar_gaps.csv`；因此本轮不能把“导入完成”记为 PASS。
+- 历史指数成分/权重的字段名与单位仍须来自实际 SDK 响应样本。导入器只接受显式 `symbol_field`、`weight_field` 和 `fraction/percent`，不自动猜测或归一化不完整权重。
+- 历史日期语义现可由 `temporal_diff.csv` 检查，但尚无本轮真实多日期导出文件，仍不能将本轮真实指数导入记为 PASS。
+
+### SDK 运行时契约待核对
+- 用户提供的在线运行方式包含 `set_init`、在线财务/Tick 函数；但公开仓库 `just2512/free-stockdb/pybao/stock_sdk.py` 当前只显示 `StockDBClient` 包装类，并导入原生 `stockdb.init/rd`，未导出远程适配器当前要求的模块级 `set_init`、`get_price`、`get_trade_days`、`get_index_stocks`、`get_index_weights`。
+- 官方说明页宣称 SDK 另有在线 API，但 API 详细文档重定向后当前无法由本次检索环境读取。不能据此臆造具体函数签名。
+- 这不否定用户在其机器上实测的 12328 在线服务；它说明仓库可见的 SDK 源码与用户实际运行时模块不是同一份可确认契约。正式导出必须记录实际 `stock_sdk.__file__`、函数签名和原始返回样本，再确认适配器契约一致。
+
+### 策略与正式回测门禁
+- A/B/C/D 策略比较编排、D 公共资金池、统一账本、下一交易日执行、报价/涨跌停/停牌/滑点/冲击约束和可复现报告写入器均已有代码及模拟契约测试。
+- A/B/C 按单只 ETF 分别运行，D 为多 ETF 公共资金池组合；正式回测仍要求分红事件快照、历史执行市场上下文和费用参数门禁 PASS。
+- `config/trading_costs.yaml` 与 `config/execution_model.yaml` 仍有未确认参数为 null；不得用零费用、零滑点或 OHLC 开盘价替代真实成交规则。
+- 分红事件仍 MISSING。现有官方公告 CSV 导入器可校验事件及逐 ETF 覆盖证明，但尚未有完整的五只 ETF 官方事件/零事件覆盖数据文件。
+- 因此当前允许做的是研究性机制回测（明确 `research_only=True`）；正式策略收益结论仍 BLOCKED。
