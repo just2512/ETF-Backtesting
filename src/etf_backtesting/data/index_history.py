@@ -442,7 +442,9 @@ def main() -> int:
     parser.add_argument("--symbol-field", required=True)
     parser.add_argument("--weight-field", required=True)
     parser.add_argument("--weight-scale", choices=("fraction", "percent"), required=True)
-    parser.add_argument("--weight-tolerance", default="0.005")\n    parser.add_argument("--retry-attempts", type=int, default=3)\n    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
+    parser.add_argument("--weight-tolerance", default="0.005")
+    parser.add_argument("--retry-attempts", type=int, default=3)
+    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
     parser.add_argument("--output", default="data/snapshots/index-constituents")
     args = parser.parse_args()
     try:
@@ -460,7 +462,9 @@ def main() -> int:
             weight_field=args.weight_field,
             weight_scale=args.weight_scale,
             output_dir=Path(args.output),
-            weight_tolerance=Decimal(args.weight_tolerance),\n            retry_attempts=args.retry_attempts,\n            retry_delay_seconds=args.retry_delay_seconds,\n        )
+            weight_tolerance=Decimal(args.weight_tolerance),
+            retry_attempts=args.retry_attempts,
+            retry_delay_seconds=args.retry_delay_seconds,\n        )
     except Exception as exc:
         print(f"index snapshot export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 4
