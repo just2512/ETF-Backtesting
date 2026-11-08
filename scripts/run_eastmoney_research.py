@@ -1,7 +1,11 @@
 # ruff: noqa: E701, E702
 """Eastmoney full-history fetch and research-only A/B/C/D backtest."""
 from __future__ import annotations
-import argparse,csv,hashlib,json,time
+import argparse
+import csv
+import hashlib
+import json
+import time
 from datetime import date,datetime,timezone
 from decimal import Decimal
 from pathlib import Path
