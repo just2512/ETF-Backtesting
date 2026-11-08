@@ -10,6 +10,28 @@ from etf_backtesting.data.index_history import (
 )
 
 
+def test_index_export_retries_transient_errors_and_records_recovery(tmp_path: Path) -> None:
+    class FlakyAdapter:
+        calls = 0
+        def read_history_constituents(self, index_id: str, as_of: date):
+            self.calls += 1
+            if self.calls < 3:
+                raise ConnectionError("\\n执行查询时发生错误")
+            return [{"code": "A", "weight": "0.4"}, {"code": "B", "weight": "0.6"}]
+
+    adapter = FlakyAdapter()
+    manifest = export_index_snapshots(
+        adapter, "TEST.XSHG", [date(2024, 1, 2)], symbol_field="code",
+        weight_field="weight", weight_scale="fraction", output_dir=tmp_path,
+        retry_attempts=3, retry_delay_seconds=0,
+    )
+    result = manifest["results"][0]
+    assert result["status"] == "PASS"
+    assert result["attempts"] == 3
+    assert len(result["retry_errors"]) == 2
+    assert result["retry_errors"][0]["error"] == "\\n执行查询时发生错误"
+
+
 def test_normalize_fraction_weights_and_keep_asof_date() -> None:
     snapshot = normalize_index_snapshot(
         [
@@ -198,3 +220,32 @@ def test_identical_dated_index_snapshots_remain_unknown(tmp_path: Path) -> None:
     )
 
     assert manifest["historical_date_semantics"]["status"] == "UNKNOWN"
+
+def test_index_export_retains_each_terminal_retry_error(tmp_path: Path) -> None:
+    class FailingAdapter:
+        calls = 0
+
+        def read_history_constituents(self, index_id: str, as_of: date):
+            self.calls += 1
+            raise ConnectionError(f"provider failure {self.calls}")
+
+    manifest = export_index_snapshots(
+        FailingAdapter(),
+        "TEST.XSHG",
+        [date(2024, 1, 2)],
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+        output_dir=tmp_path,
+        retry_attempts=2,
+        retry_delay_seconds=0,
+    )
+
+    result = manifest["results"][0]
+    assert result["status"] == "UNKNOWN"
+    assert result["attempts"] == 2
+    assert [item["error"] for item in result["retry_errors"]] == [
+        "provider failure 1",
+        "provider failure 2",
+    ]
+    assert result["error"] == "provider failure 2"

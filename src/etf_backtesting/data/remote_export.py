@@ -7,11 +7,33 @@ import csv
 import hashlib
 import json
 import sys
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
+
+
+RETRYABLE_REMOTE_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+
+def _retry_remote_call(operation: Any, attempts: int, delay_seconds: float) -> tuple[Any, int, list[dict[str, str]]]:
+    """Retry transient transport/provider failures without rewriting their identity."""
+    if attempts < 1 or delay_seconds < 0:
+        raise ValueError("attempts must be >= 1 and delay_seconds must be >= 0")
+    errors: list[dict[str, str]] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation(), attempt, errors
+        except RETRYABLE_REMOTE_ERRORS as exc:
+            errors.append({"attempt": str(attempt), "error_type": type(exc).__name__, "error": str(exc)})
+            if attempt == attempts:
+                setattr(exc, "retry_errors", errors)
+                setattr(exc, "retry_attempts", attempt)
+                raise
+            time.sleep(delay_seconds * (2 ** (attempt - 1)))
+    raise RuntimeError("unreachable retry state")
 
 
 DEFAULT_SYMBOLS = ("510300", "510880", "513020", "159928", "159611")
@@ -102,6 +124,8 @@ def export_snapshot(
     start: str = "20000101",
     end: str | None = None,
     expected_first_dates: dict[str, date] | None = None,
+    retry_attempts: int = 3,
+    retry_delay_seconds: float = 1.0,
 ) -> dict[str, object]:
     """Export one symbol per request over an explicit full-history date window."""
     if len(start) != 8 or not start.isdigit():
@@ -119,12 +143,18 @@ def export_snapshot(
     all_bars: dict[str, list[Any]] = {}
     for symbol in symbols:
         try:
-            bars = adapter.read_daily_bars(symbol, start, end)
+            bars, attempts_used, retry_errors = _retry_remote_call(
+                lambda: adapter.read_daily_bars(symbol, start, end),
+                retry_attempts,
+                retry_delay_seconds,
+            )
             if not bars:
                 symbol_results.append({
                     "symbol": symbol,
                     "status": "MISSING",
                     "error": "remote history API returned no daily bars",
+                    "attempts": attempts_used,
+                    "retry_errors": retry_errors,
                     "daily_bar_count": 0,
                     "first_date": None,
                     "last_date": None,
@@ -150,6 +180,8 @@ def export_snapshot(
             symbol_results.append({
                 "symbol": symbol,
                 "status": "PASS",
+                "attempts": attempts_used,
+                "retry_errors": retry_errors,
                 "file": file_path.as_posix(),
                 "sha256": digest,
                 "daily_bar_count": len(bars),
@@ -172,6 +204,8 @@ def export_snapshot(
         except Exception as exc:
             symbol_results.append({
                 "symbol": symbol,
+                "attempts": getattr(exc, "retry_attempts", 1),
+                "retry_errors": getattr(exc, "retry_errors", [{"attempt": "1", "error_type": type(exc).__name__, "error": str(exc)}]),
                 "status": "UNKNOWN",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
@@ -188,7 +222,11 @@ def export_snapshot(
         calendar_start = start
         calendar_end = end
         try:
-            trade_days = adapter.read_trade_days(calendar_start, calendar_end)
+            trade_days, calendar_attempts, calendar_retry_errors = _retry_remote_call(
+                lambda: adapter.read_trade_days(calendar_start, calendar_end),
+                retry_attempts,
+                retry_delay_seconds,
+            )
             if not trade_days:
                 calendar_error = {
                     "type": "EmptyCalendar",
@@ -196,7 +234,7 @@ def export_snapshot(
                 }
         except Exception as exc:
             trade_days = []
-            calendar_error = {"type": type(exc).__name__, "message": str(exc)}
+            calendar_error = {"type": type(exc).__name__, "message": str(exc), "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1}
     else:
         trade_days = []
         calendar_error = {
@@ -244,6 +282,8 @@ def export_snapshot(
         "calendar_source": "get_trade_days",
         "calendar_trade_day_count": len(trade_days),
         "calendar_status": "PASS" if calendar_error is None else "UNKNOWN",
+        "calendar_attempts": locals().get("calendar_attempts", 0),
+        "calendar_retry_errors": locals().get("calendar_retry_errors", []),
         "calendar_error": calendar_error,
         "calendar_gap_report": {
             "file": gap_report_path.as_posix(),
@@ -265,6 +305,8 @@ def main() -> int:
     parser.add_argument("--symbols", nargs="+", default=list(DEFAULT_SYMBOLS))
     parser.add_argument("--start", default="20000101")
     parser.add_argument("--end", default=date.today().strftime("%Y%m%d"))
+    parser.add_argument("--retry-attempts", type=int, default=3)
+    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
     parser.add_argument(
         "--output",
         default="data/snapshots/remote-stock-sdk",
@@ -277,6 +319,8 @@ def main() -> int:
         manifest = export_snapshot(
             adapter, args.symbols, Path(args.output),
             start=args.start, end=args.end,
+            retry_attempts=args.retry_attempts,
+            retry_delay_seconds=args.retry_delay_seconds,
         )
     except Exception as exc:
         print(
