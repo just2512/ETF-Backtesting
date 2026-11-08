@@ -307,4 +307,4 @@ def test_streaming_bollinger_value_matches_full_history_calculation() -> None:
         )
         expected = expected_points[-1]
         assert actual == (None if expected is None else expected.percent_b)
-\n
+
