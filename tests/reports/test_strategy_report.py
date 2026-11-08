@@ -148,8 +148,10 @@ def test_comparison_report_writes_all_A_B_C_and_D_run_artifacts(
     assert report["formal_comparison_allowed"] is False
     assert set(paths) == {
         "510300_A", "510300_B", "510300_C", "SHARED_POOL_D",
-        "comparison_json", "comparison_csv",
+        "comparison_json", "comparison_csv", "comparison_html",
     }
     assert Path(paths["comparison_json"]).exists()
     assert Path(paths["comparison_csv"]).exists()
+    assert Path(paths["comparison_html"]).exists()
+    assert "main-chart" in Path(paths["comparison_html"]).read_text(encoding="utf-8")
     assert all(Path(path).exists() for path in paths.values())
