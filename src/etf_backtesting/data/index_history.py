@@ -7,11 +7,31 @@ import csv
 import hashlib
 import json
 import sys
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, Mapping
+
+
+RETRYABLE_REMOTE_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+
+def _retry_remote_call(operation: Any, attempts: int, delay_seconds: float) -> tuple[Any, int, list[dict[str, str]]]:
+    """Retry transient transport/provider failures while retaining exact errors."""
+    if attempts < 1 or delay_seconds < 0:
+        raise ValueError("attempts must be >= 1 and delay_seconds must be >= 0")
+    errors: list[dict[str, str]] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation(), attempt, errors
+        except RETRYABLE_REMOTE_ERRORS as exc:
+            errors.append({"attempt": str(attempt), "error_type": type(exc).__name__, "error": str(exc)})
+            if attempt == attempts:
+                raise
+            time.sleep(delay_seconds * (2 ** (attempt - 1)))
+    raise RuntimeError("unreachable retry state")
 
 
 WeightScale = Literal["fraction", "percent"]
@@ -247,6 +267,8 @@ def export_index_snapshots(
     weight_scale: WeightScale,
     output_dir: Path,
     weight_tolerance: Decimal = Decimal("0.005"),
+    retry_attempts: int = 3,
+    retry_delay_seconds: float = 1.0,
 ) -> dict[str, object]:
     """Fetch each as-of snapshot independently and retain failures in the manifest."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -254,7 +276,7 @@ def export_index_snapshots(
     successful_snapshots: dict[date, dict[str, Decimal]] = {}
     for snapshot_date in dates:
         try:
-            raw = adapter.read_history_constituents(index_id, snapshot_date)
+            raw, attempts_used, retry_errors = _retry_remote_call(\n                lambda: adapter.read_history_constituents(index_id, snapshot_date),\n                retry_attempts,\n                retry_delay_seconds,\n            )
             snapshot = normalize_index_snapshot(
                 raw,
                 index_id,
@@ -288,8 +310,7 @@ def export_index_snapshots(
                     })
             temporary.replace(file_path)
             results.append({
-                "status": "PASS",
-                "index_id": index_id,
+                "status": "PASS",\n                "attempts": attempts_used,\n                "retry_errors": retry_errors,\n                "index_id": index_id,
                 "snapshot_date": snapshot_date.isoformat(),
                 "constituent_count": len(snapshot.rows),
                 "input_weight_scale": weight_scale,
@@ -301,8 +322,7 @@ def export_index_snapshots(
             })
         except Exception as exc:
             results.append({
-                "status": "UNKNOWN",
-                "index_id": index_id,
+                "status": "UNKNOWN",\n                "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1,\n                "retry_errors": [\n                    {"attempt": str(i + 1), "error_type": type(exc).__name__, "error": str(exc)}\n                    for i in range(retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1)\n                ],\n                "index_id": index_id,
                 "snapshot_date": snapshot_date.isoformat(),
                 "error_type": type(exc).__name__,
                 "error": str(exc),
@@ -420,7 +440,7 @@ def main() -> int:
     parser.add_argument("--symbol-field", required=True)
     parser.add_argument("--weight-field", required=True)
     parser.add_argument("--weight-scale", choices=("fraction", "percent"), required=True)
-    parser.add_argument("--weight-tolerance", default="0.005")
+    parser.add_argument("--weight-tolerance", default="0.005")\n    parser.add_argument("--retry-attempts", type=int, default=3)\n    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
     parser.add_argument("--output", default="data/snapshots/index-constituents")
     args = parser.parse_args()
     try:
@@ -438,8 +458,7 @@ def main() -> int:
             weight_field=args.weight_field,
             weight_scale=args.weight_scale,
             output_dir=Path(args.output),
-            weight_tolerance=Decimal(args.weight_tolerance),
-        )
+            weight_tolerance=Decimal(args.weight_tolerance),\n            retry_attempts=args.retry_attempts,\n            retry_delay_seconds=args.retry_delay_seconds,\n        )
     except Exception as exc:
         print(f"index snapshot export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 4
