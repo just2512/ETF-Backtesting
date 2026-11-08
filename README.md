@@ -42,6 +42,7 @@
 - [回测方法](docs/BACKTEST_METHODOLOGY.md)
 - [验收标准](docs/ACCEPTANCE_CRITERIA.md)
 - [实施与并行开发计划](docs/WORK_PLAN.md)
+- [交互式 HTML 回测报告](docs/HTML_BACKTEST_REPORT.md)
 
 ## 数据源边界
 
