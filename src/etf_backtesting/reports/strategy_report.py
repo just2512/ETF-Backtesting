@@ -342,6 +342,10 @@ def write_comparison_report(
     csv_temp.replace(csv_path)
     artifact_paths["comparison_json"] = manifest_path.as_posix()
     artifact_paths["comparison_csv"] = csv_path.as_posix()
+    from etf_backtesting.reports.html_report import render_comparison_html
+
+    html_path = render_comparison_html(output_dir)
+    artifact_paths["comparison_html"] = html_path.as_posix()
     return artifact_paths
 
 
