@@ -29,6 +29,8 @@ def _retry_remote_call(operation: Any, attempts: int, delay_seconds: float) -> t
         except RETRYABLE_REMOTE_ERRORS as exc:
             errors.append({"attempt": str(attempt), "error_type": type(exc).__name__, "error": str(exc)})
             if attempt == attempts:
+                setattr(exc, "retry_errors", errors)
+                setattr(exc, "retry_attempts", attempt)
                 raise
             time.sleep(delay_seconds * (2 ** (attempt - 1)))
     raise RuntimeError("unreachable retry state")
@@ -202,11 +204,8 @@ def export_snapshot(
         except Exception as exc:
             symbol_results.append({
                 "symbol": symbol,
-                "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1,
-                "retry_errors": [
-                    {"attempt": str(i + 1), "error_type": type(exc).__name__, "error": str(exc)}
-                    for i in range(retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1)
-                ],
+                "attempts": getattr(exc, "retry_attempts", 1),
+                "retry_errors": getattr(exc, "retry_errors", [{"attempt": "1", "error_type": type(exc).__name__, "error": str(exc)}]),
                 "status": "UNKNOWN",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
