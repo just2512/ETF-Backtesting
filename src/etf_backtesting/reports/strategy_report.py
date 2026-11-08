@@ -307,7 +307,7 @@ def write_comparison_report(
     manifest_path = output_dir / "comparison.json"
     manifest_temp = manifest_path.with_suffix(".json.part")
     manifest_temp.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     manifest_temp.replace(manifest_path)
