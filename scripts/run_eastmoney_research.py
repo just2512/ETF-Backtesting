@@ -69,9 +69,16 @@ def main():
  manifest={"schema_version":1,"generated_at":datetime.now(timezone.utc).isoformat(),"provider":"Eastmoney push2his","requested_start":start.isoformat(),"requested_end":end.isoformat(),"price_basis":"UNADJUSTED","fqt":0,"symbols":audit,"calendar_status":"UNKNOWN","limitations":["No official exchange calendar; absent bars cannot be classified as suspension or defect.","No official dividend-event coverage; cash distributions are omitted.","No historical bid/ask, limit-lock or suspension context; execution uses next-session OHLC open as a research proxy.","513020 premium/discount and cross-market valuation-time effects are not modelled."]}
  out.mkdir(parents=True,exist_ok=True); mp=out/"data_manifest.json"; mp.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
  if len(bars)!=len(SYMBOLS): print(json.dumps(manifest,ensure_ascii=False,indent=2)); return 2
- days=sorted({b.trade_date for series in bars.values() for b in series}); months={}
- for d in days: months.setdefault((d.year,d.month),d)
- dca_dates=set(months.values()); monthly=a.initial_cash/Decimal(len(dca_dates)); per=a.initial_cash/Decimal(5); reserve=a.initial_cash/Decimal(10)
+ days=sorted({b.trade_date for series in bars.values() for b in series})
+ common_days=set.intersection(*({b.trade_date for b in series} for series in bars.values()))
+ common_days=sorted(common_days)
+ if not common_days: raise ValueError("no common observed trading dates across the five ETFs")
+ months={}
+ for d in common_days: months.setdefault((d.year,d.month),d)
+ dca_dates=set(months.values())
+ monthly=a.initial_cash/Decimal(len(dca_dates))
+ per=a.initial_cash/Decimal(5)
+ reserve=a.initial_cash/Decimal(10)
  costs=TradingCostModel(Decimal("0.00015"),Decimal("0.00004"),Decimal("0"))
  config={"purpose":"RESEARCH_ONLY_NOT_FORMAL_INVESTMENT_BACKTEST","provider":"Eastmoney push2his","price_basis":"UNADJUSTED","fqt":0,"symbols":list(SYMBOLS),"initial_cash_per_run":str(a.initial_cash),"external_contributions":"NONE","A":{"schedule":"first observed session each month","monthly_budget":str(monthly)},"B_C_D":{"per_etf_cycle_budget":str(per)},"D":{"per_etf_max_market_value":str(per),"minimum_cash_reserve":str(reserve)},"fees":{"commission_rate":"0.00015","other_fee_rate":"0.00004","minimum_commission":"0","status":"RESEARCH_ASSUMPTION_NOT_BROKER_CONFIRMED"},"bollinger":{"period":20,"deviations":2.0,"ddof":0,"signal":"AFTER_CLOSE","execution":"NEXT_SESSION_OPEN"},"sell_mode":"S1","lot_size":100,"dividend_gate":"MISSING","execution_rules_gate":"UNKNOWN","research_only":True,"calendar":"UNION_OF_OBSERVED_ETF_DATES_NOT_OFFICIAL"}
  result=StrategyComparisonRunner(lot_size=100).run(bars,days,initial_cash=a.initial_cash,costs=costs,dca_budget_by_symbol={s:monthly for s in SYMBOLS},per_etf_cycle_budget={s:per for s in SYMBOLS},max_market_value_by_symbol={s:per for s in SYMBOLS},dca_dates=dca_dates,reserve_cash=reserve,sell_mode="S1",dividend_status="MISSING",execution_rules_status="UNKNOWN",research_only=True)
