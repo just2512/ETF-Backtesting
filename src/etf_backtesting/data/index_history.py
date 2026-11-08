@@ -14,6 +14,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
+from etf_backtesting.data.provider_errors import ProviderQuotaExceeded
+
 
 RETRYABLE_REMOTE_ERRORS = (ConnectionError, TimeoutError, OSError)
 
@@ -343,6 +345,18 @@ def export_index_snapshots(
                 "error_type": type(exc).__name__,
                 "error": str(exc),
             })
+            if isinstance(exc, ProviderQuotaExceeded):
+                for unattempted_date in dates[dates.index(snapshot_date) + 1:]:
+                    results.append({
+                        "status": "NOT_ATTEMPTED",
+                        "attempts": 0,
+                        "retry_errors": [],
+                        "index_id": index_id,
+                        "snapshot_date": unattempted_date.isoformat(),
+                        "error_type": "ProviderQuotaExceeded",
+                        "error": "not requested because the provider quota was exhausted",
+                    })
+                break
 
     temporal_diffs: list[dict[str, object]] = []
     temporal_rows: list[dict[str, str]] = []
