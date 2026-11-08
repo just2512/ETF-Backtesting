@@ -40,3 +40,10 @@ def test_cash_pool_enforces_industry_caps_before_allocation() -> None:
     )
     assert result[0].allocated_cash == Decimal("100")
     assert result[0].reason == "INDUSTRY_CAP_LIMIT"
+
+def test_cash_pool_blocks_new_buys_when_market_value_is_already_above_cap() -> None:
+    signal = BuySignal("510300", -0.2, Decimal("500"), Decimal("1200"), Decimal("1000"))
+    result = CashPoolAllocator().allocate(Decimal("1000"), Decimal("0"), [signal])
+    assert result[0].allocated_cash == Decimal("0")
+    assert result[0].reason == "CAP_OR_CASH_LIMIT"
+\n
