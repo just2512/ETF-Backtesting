@@ -251,6 +251,7 @@ def export_index_snapshots(
     """Fetch each as-of snapshot independently and retain failures in the manifest."""
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, object]] = []
+    successful_snapshots: dict[date, dict[str, Decimal]] = {}
     for snapshot_date in dates:
         try:
             raw = adapter.read_history_constituents(index_id, snapshot_date)
@@ -263,6 +264,9 @@ def export_index_snapshots(
                 weight_scale=weight_scale,
                 weight_tolerance=weight_tolerance,
             )
+            successful_snapshots[snapshot_date] = {
+                row.constituent_symbol: row.weight_fraction for row in snapshot.rows
+            }
             file_path = output_dir / f"{index_id.replace('.', '_')}_{snapshot_date.isoformat()}.csv"
             temporary = file_path.with_suffix(".csv.part")
             with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -304,6 +308,78 @@ def export_index_snapshots(
                 "error": str(exc),
             })
 
+    temporal_diffs: list[dict[str, object]] = []
+    temporal_rows: list[dict[str, str]] = []
+    successful_dates = sorted(successful_snapshots)
+    for previous_date, current_date in zip(successful_dates, successful_dates[1:]):
+        previous = successful_snapshots[previous_date]
+        current = successful_snapshots[current_date]
+        previous_symbols = set(previous)
+        current_symbols = set(current)
+        added = sorted(current_symbols - previous_symbols)
+        removed = sorted(previous_symbols - current_symbols)
+        changed = sorted(
+            symbol for symbol in previous_symbols & current_symbols
+            if previous[symbol] != current[symbol]
+        )
+        for symbol in added:
+            temporal_rows.append({
+                "previous_date": previous_date.isoformat(),
+                "current_date": current_date.isoformat(),
+                "change_type": "ADDED",
+                "constituent_symbol": symbol,
+                "previous_weight_fraction": "",
+                "current_weight_fraction": str(current[symbol]),
+            })
+        for symbol in removed:
+            temporal_rows.append({
+                "previous_date": previous_date.isoformat(),
+                "current_date": current_date.isoformat(),
+                "change_type": "REMOVED",
+                "constituent_symbol": symbol,
+                "previous_weight_fraction": str(previous[symbol]),
+                "current_weight_fraction": "",
+            })
+        for symbol in changed:
+            temporal_rows.append({
+                "previous_date": previous_date.isoformat(),
+                "current_date": current_date.isoformat(),
+                "change_type": "WEIGHT_CHANGED",
+                "constituent_symbol": symbol,
+                "previous_weight_fraction": str(previous[symbol]),
+                "current_weight_fraction": str(current[symbol]),
+            })
+        temporal_diffs.append({
+            "previous_date": previous_date.isoformat(),
+            "current_date": current_date.isoformat(),
+            "previous_constituent_count": len(previous),
+            "current_constituent_count": len(current),
+            "added_count": len(added),
+            "removed_count": len(removed),
+            "changed_weight_count": len(changed),
+            "snapshots_differ": bool(added or removed or changed),
+        })
+
+    temporal_path = output_dir / "temporal_diff.csv"
+    temporal_temp = temporal_path.with_suffix(".csv.part")
+    with temporal_temp.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=(
+                "previous_date", "current_date", "change_type",
+                "constituent_symbol", "previous_weight_fraction",
+                "current_weight_fraction",
+            ),
+        )
+        writer.writeheader()
+        writer.writerows(temporal_rows)
+    temporal_temp.replace(temporal_path)
+    temporal_sha256 = hashlib.sha256(temporal_path.read_bytes()).hexdigest()
+    temporal_status = (
+        "PASS" if any(item["snapshots_differ"] for item in temporal_diffs)
+        else "UNKNOWN"
+    )
+
     manifest: dict[str, object] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "stock-sdk-online",
@@ -314,6 +390,18 @@ def export_index_snapshots(
         "weight_scale": weight_scale,
         "weight_tolerance": str(weight_tolerance),
         "results": results,
+        "historical_date_semantics": {
+            "status": temporal_status,
+            "evidence": (
+                "at least one dated pair returned different constituents or weights"
+                if temporal_status == "PASS"
+                else "fewer than two successful dates or no differences observed"
+            ),
+            "comparisons": temporal_diffs,
+            "diff_file": temporal_path.as_posix(),
+            "diff_sha256": temporal_sha256,
+            "diff_row_count": len(temporal_rows),
+        },
     }
     manifest_path = output_dir / "manifest.json"
     temporary_manifest = manifest_path.with_suffix(".json.part")
