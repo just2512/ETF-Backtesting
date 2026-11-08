@@ -24,10 +24,12 @@ Configuration:
 - `get_index_stocks(index_id, date=...)` and `get_index_weights(index_id, date=...)`: historical index membership and weights. Use the provider's exchange suffix, e.g. `.XSHG`, and preserve the requested historical date.
 
 The adapter enables DataFrame mode before `get_price` because list mode omits
-the date field. Provider error strings such as `执行查询时发生错误` are
-converted to connection errors while retaining the original text; they are
-retryable by the existing exporter policy. Empty results remain MISSING, not
-successful imports.
+the date field. Generic provider error strings such as `执行查询时发生错误` are
+converted to connection errors while retaining the original text and retried.
+The live cloud run also exposed the provider's explicit test-quota response:
+`测试期超2000次…24小时内会重置`. This is classified as a non-retryable
+`ProviderQuotaExceeded`; the exporter stops issuing further calls instead of
+burning the remaining quota. Empty results remain MISSING, not successful imports.
 
 ## Runtime dependency
 
@@ -46,3 +48,19 @@ contract. Actual data import is PASS only after the cloud job imports the
 official SDK binary, reaches the provider endpoint, and writes audited
 historical responses for all five ETFs plus dated index constituent/weight
 snapshots. A green mocked CI test does not prove provider availability.
+
+
+## Request-volume boundary and index snapshot cadence
+
+The provider explicitly warns that the online API is a supplemental source,
+not a bulk-download interface, and directs unlimited batch queries to local
+StockDB. The current test service enforces a 2,000-request quota with a
+24-hour reset. Therefore the cloud workflow does not issue daily historical
+index requests. It imports the first available session from the common
+2022-02-08 start plus each month's final trading session for the five tracking
+indices. This is a point-in-time monthly snapshot series suitable for monthly
+rebalance analysis; it does **not** establish daily index-constituent coverage.
+The manifest records `MONTH_END_PLUS_RANGE_START` and keeps daily completeness
+UNKNOWN. A full daily index history requires the provider's bulk/local StockDB
+data path or a separately authorized bulk mirror; the online supplement API
+must not be used to bypass its stated limit.
