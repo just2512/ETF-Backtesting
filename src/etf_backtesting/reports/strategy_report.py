@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Mapping
 
+from etf_backtesting.strategies.comparison import StrategyComparisonResult
 from etf_backtesting.strategies.orchestrator import StrategyRunResult
 from etf_backtesting.reports.performance import maximum_drawdown, unitized_nav
 
@@ -184,6 +185,162 @@ def build_strategy_report(
             for index, (snapshot, nav) in enumerate(zip(snapshots, nav_values, strict=True))
         ],
     }
+
+
+def build_comparison_report(
+    result: StrategyComparisonResult,
+    *,
+    data_snapshot_sha256: str,
+    run_config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build one deterministic report set for A/B/C-per-ETF and D shared-pool runs."""
+    if len(data_snapshot_sha256) != 64 or any(
+        character not in "0123456789abcdefABCDEF" for character in data_snapshot_sha256
+    ):
+        raise ValueError("data_snapshot_sha256 must be a 64-character hexadecimal digest")
+    if not run_config:
+        raise ValueError("run_config must include the complete explicit run parameters")
+
+    entries: list[dict[str, Any]] = []
+    for symbol in sorted(result.single_etf_runs):
+        for strategy in ("A", "B", "C"):
+            run = result.single_etf_runs[symbol][strategy]
+            effective_config = {
+                **dict(run_config),
+                "strategy": strategy,
+                "symbol_scope": symbol,
+            }
+            report = build_strategy_report(
+                run,
+                data_snapshot_sha256=data_snapshot_sha256,
+                run_config=effective_config,
+            )
+            entries.append({
+                "strategy": strategy,
+                "symbol_scope": symbol,
+                "run_id": report["run_id"],
+                "gates": report["gates"],
+                "summary": report["summary"],
+                "report": report,
+            })
+
+    run = result.shared_pool_run
+    effective_config = {
+        **dict(run_config),
+        "strategy": "D",
+        "symbol_scope": "SHARED_POOL",
+    }
+    report = build_strategy_report(
+        run,
+        data_snapshot_sha256=data_snapshot_sha256,
+        run_config=effective_config,
+    )
+    entries.append({
+        "strategy": "D",
+        "symbol_scope": "SHARED_POOL",
+        "run_id": report["run_id"],
+        "gates": report["gates"],
+        "summary": report["summary"],
+        "report": report,
+    })
+
+    identity = {
+        "schema_version": "1",
+        "data_snapshot_sha256": data_snapshot_sha256.lower(),
+        "run_config_sha256": _sha256(_canonical_json(run_config)),
+        "run_ids": [item["run_id"] for item in entries],
+        "trading_days": [item.isoformat() for item in result.trading_days],
+    }
+    return {
+        "schema_version": "1",
+        "comparison_id": _sha256(_canonical_json(identity)),
+        "data_snapshot_sha256": data_snapshot_sha256.lower(),
+        "run_config_sha256": identity["run_config_sha256"],
+        "run_config": dict(run_config),
+        "trading_days": identity["trading_days"],
+        "formal_comparison_allowed": all(
+            item["gates"]["formal_result_allowed"] for item in entries
+        ),
+        "runs": entries,
+    }
+
+
+def write_comparison_report(
+    comparison: Mapping[str, Any],
+    output_dir: Path,
+) -> dict[str, str]:
+    """Write per-run artifacts plus deterministic JSON and CSV comparison indexes."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    run_index: list[dict[str, Any]] = []
+    artifact_paths: dict[str, str] = {}
+
+    for item in comparison["runs"]:
+        scope = str(item["symbol_scope"])
+        strategy = str(item["strategy"])
+        safe_scope = "".join(
+            character for character in scope if character.isalnum() or character in "-_"
+        )
+        relative_dir = Path("runs") / safe_scope / strategy
+        run_dir = output_dir / relative_dir
+        paths = write_strategy_report(item["report"], run_dir)
+        report_path = Path(paths["summary"])
+        report_sha256 = hashlib.sha256(report_path.read_bytes()).hexdigest()
+        relative_files = {
+            name: (relative_dir / Path(path).name).as_posix()
+            for name, path in paths.items()
+        }
+        artifact_paths[f"{safe_scope}_{strategy}"] = relative_files["summary"]
+        run_index.append({
+            "strategy": strategy,
+            "symbol_scope": scope,
+            "run_id": item["run_id"],
+            "gates": item["gates"],
+            "summary": item["summary"],
+            "report_sha256": report_sha256,
+            "artifacts": relative_files,
+        })
+
+    manifest = {
+        key: value for key, value in comparison.items() if key != "runs"
+    }
+    manifest["runs"] = run_index
+    manifest_path = output_dir / "comparison.json"
+    manifest_temp = manifest_path.with_suffix(".json.part")
+    manifest_temp.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
+        encoding="utf-8",
+    )
+    manifest_temp.replace(manifest_path)
+
+    csv_path = output_dir / "comparison.csv"
+    csv_temp = csv_path.with_suffix(".csv.part")
+    fields = (
+        "strategy", "symbol_scope", "run_id", "formal_result_allowed",
+        "dividend_gate", "execution_rules_gate", "index_exposure_gate",
+        "first_date", "last_date", "final_nav", "time_weighted_return",
+        "maximum_drawdown", "fees", "turnover", "filled_orders",
+        "partial_orders", "rejected_orders", "no_fill_orders",
+    )
+    with csv_temp.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for item in run_index:
+            gates = item["gates"]
+            summary = item["summary"]
+            writer.writerow({
+                "strategy": item["strategy"],
+                "symbol_scope": item["symbol_scope"],
+                "run_id": item["run_id"],
+                "formal_result_allowed": gates["formal_result_allowed"],
+                "dividend_gate": gates["dividend"],
+                "execution_rules_gate": gates["execution_rules"],
+                "index_exposure_gate": gates["index_exposure"],
+                **{key: summary[key] for key in fields[7:]},
+            })
+    csv_temp.replace(csv_path)
+    artifact_paths["comparison_json"] = manifest_path.as_posix()
+    artifact_paths["comparison_csv"] = csv_path.as_posix()
+    return artifact_paths
 
 
 def write_strategy_report(
