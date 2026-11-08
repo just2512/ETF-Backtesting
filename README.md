@@ -110,7 +110,7 @@ python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30
 现金分红事件必须来自基金管理人/交易所官方公告，且每只ETF都要有覆盖证明。事件表字段：`symbol,ex_date,record_date,pay_date,cash_per_share,announcement_date,source_name,source_url`；覆盖表字段：`symbol,coverage_start,coverage_end,source_name,source_url`。
 
 ```powershell
-python scripts/import_dividends.py --events data/raw/official_dividends.csv --coverage data/raw/dividend_coverage.csv --symbols 510300 510880 513020 159928 159611 --coverage-start 2012-01-01 --coverage-end 2026-11-07 --approved-domain <官方公告域名>
+python scripts/import_dividends.py --events data/raw/official_dividends.csv --coverage data/raw/dividend_coverage.csv --symbols 510300 510880 513020 159928 159611 --coverage-start 2007-01-18 --coverage-end 2026-11-08 --approved-domain <官方公告域名>
 ```
 
-导入器要求每只ETF的覆盖区间完整、来源域名在显式白名单中、公告日期不晚于除息日、现金分红金额有效。某只ETF没有事件时，只有完整覆盖证明才能表示“该区间未发现分红”；缺少覆盖声明不会默认为零。导出 manifest 的 SHA-256 必须传入正式回测的 `dividend_snapshot_sha256`。
+导入器要求每只ETF从其上市日起覆盖到回测结束日（510880最早，2007-01-18；其余ETF按各自上市日），来源域名在显式白名单中、公告日期不晚于除息日、现金分红金额有效。全局 `coverage-start` 是回测区间起点，覆盖 CSV 的每只ETF可以从自身上市日开始；不得用2012年起的覆盖声明声称510880全史完整。某只ETF没有事件时，只有完整覆盖证明才能表示“该区间未发现分红”；缺少覆盖声明不会默认为零。导出 manifest 的 SHA-256 必须传入正式回测的 `dividend_snapshot_sha256`。

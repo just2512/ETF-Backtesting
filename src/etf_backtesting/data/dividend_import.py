@@ -16,6 +16,15 @@ from urllib.parse import urlparse
 from etf_backtesting.engine.corporate_actions import ETFDividend
 
 
+DEFAULT_LISTING_DATES = {
+    "510300": date(2012, 5, 28),
+    "510880": date(2007, 1, 18),
+    "513020": date(2022, 2, 8),
+    "159928": date(2013, 9, 16),
+    "159611": date(2022, 1, 7),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class DividendCoverage:
     symbol: str
@@ -61,6 +70,7 @@ def load_dividend_snapshot(
     coverage_start: date,
     coverage_end: date,
     approved_domains: set[str],
+    listing_dates: dict[str, date] | None = None,
 ) -> DividendSnapshot:
     """Validate complete source coverage and official event provenance.
 
@@ -75,6 +85,9 @@ def load_dividend_snapshot(
     if not domains:
         raise ValueError("at least one approved official source domain is required")
 
+    known_listing_dates = (
+        DEFAULT_LISTING_DATES if listing_dates is None else listing_dates
+    )
     coverage_rows = _read_csv(coverage_path)
     coverage_by_symbol: dict[str, DividendCoverage] = {}
     for row in coverage_rows:
@@ -87,8 +100,15 @@ def load_dividend_snapshot(
         end = date.fromisoformat(row["coverage_end"])
         source_name = row.get("source_name", "").strip()
         source_url = row.get("source_url", "").strip()
-        if start > coverage_start or end < coverage_end:
-            raise ValueError(f"dividend coverage does not span requested interval for {symbol}")
+        active_start = max(
+            coverage_start,
+            known_listing_dates.get(symbol, coverage_start),
+        )
+        if start > active_start or end < coverage_end:
+            raise ValueError(
+                "dividend coverage does not span the symbol's active requested interval "
+                f"for {symbol}: required {active_start}..{coverage_end}, got {start}..{end}"
+            )
         if not source_name or not _approved_https_url(source_url, domains):
             raise ValueError(f"unapproved or missing coverage source for {symbol}")
         coverage_by_symbol[symbol] = DividendCoverage(
@@ -109,8 +129,12 @@ def load_dividend_snapshot(
         record_date = date.fromisoformat(row["record_date"])
         pay_date = date.fromisoformat(row["pay_date"])
         announcement_date = date.fromisoformat(row["announcement_date"])
-        if not coverage_start <= ex_date <= coverage_end:
-            raise ValueError(f"dividend ex-date outside covered interval for {symbol}")
+        active_start = max(
+            coverage_start,
+            known_listing_dates.get(symbol, coverage_start),
+        )
+        if not active_start <= ex_date <= coverage_end:
+            raise ValueError(f"dividend ex-date outside the symbol's active covered interval for {symbol}")
         key = (symbol, ex_date, record_date, pay_date)
         if key in seen:
             raise ValueError(f"duplicate dividend event: {key}")
