@@ -211,39 +211,53 @@ def main() -> int:
         report["first_trading_day"] = trade_days[0].isoformat() if trade_days else None
         report["last_trading_day"] = trade_days[-1].isoformat() if trade_days else None
 
+        tracking_indices = load_tracking_indices()
         for etf_symbol, index_id in resolved.items():
-            # Determine the provider's actual field names and weight units from
-            # one dated response. No field names or units are guessed.
-            sample_date = next((day for day in trade_days if day >= start_date), None)
-            if sample_date is None:
-                raise ValueError("trading calendar contains no date in the requested range")
-            raw = retry(
-                lambda: adapter.read_history_constituents(index_id, sample_date),
-                args.retry_attempts,
-                args.retry_delay_seconds,
-            )
-            symbol_field, weight_field, scale = weight_contract(raw)
-            manifest = export_index_snapshots(
-                adapter,
-                index_id,
-                trade_days,
-                symbol_field=symbol_field,
-                weight_field=weight_field,
-                weight_scale=scale,  # type: ignore[arg-type]
-                output_dir=output / index_id.replace(".", "_"),
-                retry_attempts=args.retry_attempts,
-                retry_delay_seconds=args.retry_delay_seconds,
-            )
-            report["results"].append({
-                "etf_symbol": etf_symbol,
-                "tracking_index": load_tracking_indices()[etf_symbol],
-                "index_id": index_id,
-                "symbol_field": symbol_field,
-                "weight_field": weight_field,
-                "weight_scale": scale,
-                "snapshot_count": len(trade_days),
-                "manifest": manifest,
-            })
+            try:
+                # Determine the provider's actual field names and weight units
+                # from one dated response. No fields or units are guessed.
+                sample_date = next((day for day in trade_days if day >= start_date), None)
+                if sample_date is None:
+                    raise ValueError("trading calendar contains no date in the requested range")
+                raw = retry(
+                    lambda: adapter.read_history_constituents(index_id, sample_date),
+                    args.retry_attempts,
+                    args.retry_delay_seconds,
+                )
+                symbol_field, weight_field, scale = weight_contract(raw)
+                manifest = export_index_snapshots(
+                    adapter,
+                    index_id,
+                    trade_days,
+                    symbol_field=symbol_field,
+                    weight_field=weight_field,
+                    weight_scale=scale,  # type: ignore[arg-type]
+                    output_dir=output / index_id.replace(".", "_"),
+                    retry_attempts=args.retry_attempts,
+                    retry_delay_seconds=args.retry_delay_seconds,
+                )
+                report["results"].append({
+                    "status": "PASS" if all(
+                        item.get("status") == "PASS" for item in manifest["results"]
+                    ) else "UNKNOWN",
+                    "etf_symbol": etf_symbol,
+                    "tracking_index": tracking_indices[etf_symbol],
+                    "index_id": index_id,
+                    "symbol_field": symbol_field,
+                    "weight_field": weight_field,
+                    "weight_scale": scale,
+                    "snapshot_count": len(trade_days),
+                    "manifest": manifest,
+                })
+            except Exception as exc:
+                report["results"].append({
+                    "status": "UNKNOWN",
+                    "etf_symbol": etf_symbol,
+                    "tracking_index": tracking_indices[etf_symbol],
+                    "index_id": index_id,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                })
     except Exception as exc:
         report["fatal_error"] = {
             "error_type": type(exc).__name__,
