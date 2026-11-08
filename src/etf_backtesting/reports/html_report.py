@@ -136,7 +136,7 @@ function lineChart(id,series,key,legendId,percent=false){const canvas=document.g
  let min=Math.min(...vals),max=Math.max(...vals);if(min===max){min-=.02;max+=.02}if(percent&&max>0)max=Math.max(0,max);
  const y=v=>T+(max-v)/(max-min)*ph,x=i=>L+(series[0].points.length<=1?0:i/(series[0].points.length-1)*pw);
  c.font="11px sans-serif";c.strokeStyle="#e3e8ed";c.fillStyle="#657382";c.lineWidth=1;
- for(let i=0;i<=4;i++){const v=min+(max-min)*i/4,yy=y(v);c.beginPath();c.moveTo(L,yy);c.lineTo(w-R,yy);c.stroke();c.fillText(fmt(v,percent?"%":""),3,yy+4)}
+ for(let i=0;i<=4;i++){const v=min+(max-min)*i/4,yy=y(v);c.beginPath();c.moveTo(L,yy);c.lineTo(w-R,yy);c.stroke();c.fillText(percent?fmt(v*100,"%"):fmt(v),3,yy+4)}
  c.strokeStyle="#9aa7b3";c.beginPath();c.moveTo(L,T);c.lineTo(L,T+ph);c.lineTo(w-R,T+ph);c.stroke();
  series.forEach((s,idx)=>{const color=COLORS[idx%COLORS.length];c.strokeStyle=color;c.lineWidth=2;c.beginPath();let started=false;s.points.forEach((p,i)=>{const v=Number(p[key]);if(!Number.isFinite(v))return;const xx=x(i),yy=y(v);if(!started){c.moveTo(xx,yy);started=true}else c.lineTo(xx,yy)});c.stroke()});
  c.fillStyle="#657382";const dates=series[0].points;if(dates.length){c.fillText(dates[0].date||"",L,T+ph+22);const last=dates[dates.length-1];const label=last.date||"";c.fillText(label,Math.max(L,w-R-c.measureText(label).width),T+ph+22)}
@@ -154,7 +154,7 @@ function update(){const runs=selected();document.getElementById("no-data").hidde
  const title={nav:"单位净值曲线",total_value:"账户总资产曲线",holdings_value:"持仓市值曲线",cash:"现金余额曲线"};
  document.getElementById("main-chart-title").textContent=title[metric]+"对比";
  lineChart("main-chart",series,metric,"main-legend");
- lineChart("dd-chart",series,"drawdown","dd-legend");
+ lineChart("dd-chart",series,"drawdown","dd-legend",true);
  // Draw cash and holdings as separate series, retaining each selected run as a distinct line.
  const assets=[];series.forEach(s=>{assets.push({label:s.label+" · 现金",points:s.points.map(p=>({...p,total:Number(p.cash)}))});assets.push({label:s.label+" · 持仓",points:s.points.map(p=>({...p,total:Number(p.holdings_value)}))})});
  lineChart("asset-chart",assets,"total","asset-legend");
