@@ -26,6 +26,8 @@ class StockSDKAdapter:
         host: str,
         port: int,
         online_endpoint: str,
+        *,
+        initialize_native: bool = True,
     ) -> None:
         if not callable(getattr(sdk, "init", None)):
             raise TypeError("stock_sdk module must expose init(host, port)")
@@ -52,8 +54,13 @@ class StockSDKAdapter:
         )
 
         # The native StockDB port and online API are separate services.
-        # Do not touch the local native channel unless explicitly requested by
-        # a caller; cloud jobs need only the provider's online endpoint.
+        # Cloud construction skips the local channel; explicit native callers
+        # retain the legacy init behavior.
+        if initialize_native:
+            try:
+                sdk.init(host, port)
+            except Exception as exc:
+                self.native_init_error = exc
         sdk.set_init(online_endpoint)
 
     @classmethod
@@ -80,18 +87,18 @@ class StockSDKAdapter:
             port = int(port_text)
         except ValueError as exc:
             raise ValueError("STOCKSDK_PORT must be an integer") from exc
-        adapter = cls.connect(
-            host=host,
-            port=port,
-            online_endpoint=endpoint,
-            sdk_module=os.getenv("STOCKSDK_MODULE", "stock_sdk"),
+        sdk_module = os.getenv("STOCKSDK_MODULE", "stock_sdk")
+        sdk = importlib.import_module(sdk_module)
+        initialize_native = os.getenv(
+            "STOCKSDK_INIT_NATIVE", "false"
+        ).lower() in {"1", "true", "yes"}
+        return cls(
+            sdk,
+            host,
+            port,
+            endpoint,
+            initialize_native=initialize_native,
         )
-        if os.getenv("STOCKSDK_INIT_NATIVE", "false").lower() in {"1", "true", "yes"}:
-            try:
-                adapter.sdk.init(host, port)
-            except Exception as exc:
-                adapter.native_init_error = exc
-        return adapter
 
     def read_daily_bars(
         self,
