@@ -81,10 +81,10 @@ python scripts/probe_remote_sdk_contract.py --index-id 000300.XSHG --date 2020-0
 输出包含实际加载的 `stock_sdk` 模块路径、各接口函数签名、交易日历样本、历史指数返回列名/数据类型/前五行及数值列统计。证券代码字段和权重单位只提供证据，不自动猜测。确认字段后再运行以下历史快照导出：
 
 ```powershell
-python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30 2021-06-30 --symbol-field <实际证券代码字段> --weight-field <实际权重字段> --weight-scale percent
+python scripts/export_index_history.py --index-id 000300.XSHG --dates 2020-06-30 2026-11-06 --symbol-field <实际证券代码字段> --weight-field <实际权重字段> --weight-scale <fraction或percent>
 ```
 
-若 API 返回的权重是 0.0–1.0 的小数比例，将 `--weight-scale` 改为 `fraction`。导入器会拒绝字段缺失、成分重复、非正权重和权重合计不在 100% 容差内的数据；不会把不完整成分列表自动归一化。每个历史日期独立写 CSV 与 SHA-256，失败日期保留在 manifest 中。
+若 API 返回的权重是 0.0–1.0 的小数比例，将 `--weight-scale` 改为 `fraction`。导入器会拒绝字段缺失、成分重复、非正权重和权重合计不在 100% 容差内的数据；不会把不完整成分列表自动归一化。每个历史日期独立写 CSV 与 SHA-256，失败日期保留在 manifest 中；同时生成 `temporal_diff.csv`，逐项比较前后两个成功日期的成分新增/剔除及权重变化。只有观察到不同日期的返回快照确实不同，历史日期差异证据才记为 PASS；只有一个成功日期或多日期结果完全相同时保持 UNKNOWN，不将接口接受 date 参数等同于历史语义已验证。
 
 ## 关键原则
 
