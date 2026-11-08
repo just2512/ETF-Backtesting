@@ -232,6 +232,17 @@ def main() -> int:
         snapshot_dates = month_end_trade_days(trade_days, start_date)
         report["snapshot_date_count"] = len(snapshot_dates)
         report["snapshot_dates"] = [day.isoformat() for day in snapshot_dates]
+        estimated_max_requests = (
+            2
+            + len(resolved) * 2 * args.retry_attempts
+            + len(resolved) * len(snapshot_dates) * 2 * args.retry_attempts
+        )
+        report["estimated_max_provider_requests"] = estimated_max_requests
+        if estimated_max_requests > 1800:
+            raise ValueError(
+                "planned index import exceeds the 1,800-request safety budget: "
+                f"{estimated_max_requests}"
+            )
 
         tracking_indices = load_tracking_indices()
         for etf_symbol, index_id in resolved.items():
