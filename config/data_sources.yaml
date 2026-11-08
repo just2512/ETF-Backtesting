@@ -1,13 +1,14 @@
 free_stockdb:
   enabled: true
-  host_env: "FREESTOCKDB_HOST"
-  default_host: "127.0.0.1"
-  port_env: "FREESTOCKDB_PORT"
-  default_port: 7899
-  sdk_module_env: "FREESTOCKDB_SDK_MODULE"
-  default_sdk_module: "stock_sdk"
+  transport: "HTTP"
+  endpoint_env: "STOCKSDK_ONLINE_ENDPOINT"
+  sdk_module_env: "STOCKSDK_MODULE"
+  default_sdk_module: "etf_backtesting.adapters.free_stockdb_http_sdk"
+  native_extension_required: false
+  daily_bars_query: "cmd=get&t=日k:{symbol}:*"
   daily_price_basis: "UNADJUSTED"
   adjustment_factor_semantics: "UNVERIFIED"
+  trading_calendar: "UNKNOWN"
   cash_dividend_endpoint: null
   historical_index_constituent_endpoint: null
 
