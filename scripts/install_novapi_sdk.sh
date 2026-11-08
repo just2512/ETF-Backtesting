@@ -34,7 +34,7 @@ export PYTHONPATH="$SDK_ROOT:${PYTHONPATH:-}"
 python - <<'PY'
 import importlib
 sdk = importlib.import_module("stock_sdk")
-required = ("set_init", "get_price", "get_trade_days", "get_index_stocks", "get_index_weights")
+required = ("set_init", "get_price", "get_trade_days", "get_index_stocks", "get_index_weights", "get_all_securities")
 missing = [name for name in required if not callable(getattr(sdk, name, None))]
 if missing:
     raise SystemExit(
