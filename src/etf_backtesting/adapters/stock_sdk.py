@@ -71,12 +71,15 @@ class StockSDKAdapter:
 
     @classmethod
     def from_environment(cls) -> StockSDKAdapter:
-        host = os.getenv("STOCKSDK_HOST")
+        # The default cloud path is the HTTP-only free-stockdb SDK. Its
+        # compatibility init() is a no-op, so a local/native StockDB host is
+        # not required. A custom/native SDK can still override STOCKSDK_HOST.
+        host = os.getenv("STOCKSDK_HOST", "127.0.0.1")
         port_text = os.getenv("STOCKSDK_PORT", "7899")
         endpoint = os.getenv("STOCKSDK_ONLINE_ENDPOINT")
-        if not host or not endpoint:
+        if not endpoint:
             raise ValueError(
-                "STOCKSDK_HOST and STOCKSDK_ONLINE_ENDPOINT must be configured; "
+                "STOCKSDK_ONLINE_ENDPOINT must be configured; "
                 "do not embed service addresses or credentials in source control"
             )
         try:
@@ -87,7 +90,10 @@ class StockSDKAdapter:
             host=host,
             port=port,
             online_endpoint=endpoint,
-            sdk_module=os.getenv("STOCKSDK_MODULE", "stock_sdk"),
+            sdk_module=os.getenv(
+                "STOCKSDK_MODULE",
+                "etf_backtesting.adapters.free_stockdb_http_sdk",
+            ),
         )
 
     def read_daily_bars(
