@@ -165,12 +165,18 @@ class StockSDKAdapter:
         # server-side failures by returning a bare error string ("执行查询时发
         # 生错误") instead of raising. A string is never price data; surface
         # the exact text instead of masking it as a schema problem.
-        if isinstance(records, str):
+        return self._raise_on_service_error(records, "get_price", symbol)
+
+    @staticmethod
+    def _raise_on_service_error(result: Any, api_name: str, context: str = "") -> Any:
+        """Convert the provider's bare-text failure response at the API boundary."""
+        if isinstance(result, str):
+            detail = result.strip()
+            suffix = f" for {context}" if context else ""
             raise ConnectionError(
-                f"online get_price returned a service error string for {symbol}: "
-                f"{records.strip()!r}"
+                f"online {api_name}{suffix} returned a service error string: {detail!r}"
             )
-        return records
+        return result
 
     def _records_from_result(self, records: Any) -> list[Mapping[str, Any]]:
         if records is None:
@@ -255,22 +261,31 @@ class StockSDKAdapter:
                 raise TypeError(
                     f"stock_sdk module must expose configured historical-index API {index_api}()"
                 )
-            return getter(index_id, date=as_of.isoformat())
+            result = getter(index_id, date=as_of.isoformat())
+            return self._raise_on_service_error(result, index_api, index_id)
 
         stocks_api = os.getenv("STOCKSDK_INDEX_STOCKS_API", "get_index_stocks")
         weights_api = os.getenv("STOCKSDK_INDEX_WEIGHTS_API", "get_index_weights")
         stocks_getter = getattr(self.sdk, stocks_api, None)
         weights_getter = getattr(self.sdk, weights_api, None)
         if callable(stocks_getter) and callable(weights_getter):
-            return {
-                "stocks": stocks_getter(index_id, date=as_of.isoformat()),
-                "weights": weights_getter(index_id, date=as_of.isoformat()),
-            }
+            stocks = self._raise_on_service_error(
+                stocks_getter(index_id, date=as_of.isoformat()),
+                stocks_api,
+                index_id,
+            )
+            weights = self._raise_on_service_error(
+                weights_getter(index_id, date=as_of.isoformat()),
+                weights_api,
+                index_id,
+            )
+            return {"stocks": stocks, "weights": weights}
 
         fallback_api = "get_history_constituents"
         fallback_getter = getattr(self.sdk, fallback_api, None)
         if callable(fallback_getter):
-            return fallback_getter(index_id, date=as_of.isoformat())
+            result = fallback_getter(index_id, date=as_of.isoformat())
+            return self._raise_on_service_error(result, fallback_api, index_id)
         raise TypeError(
             "stock_sdk must expose either the configured combined index API or "
             f"both {stocks_api}() and {weights_api}()"
@@ -356,7 +371,8 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose get_fundamentals()")
         if not stat_date:
             raise ValueError("stat_date must not be empty")
-        return getter(query_object, statDate=stat_date)
+        result = getter(query_object, statDate=stat_date)
+        return self._raise_on_service_error(result, "get_fundamentals", stat_date)
 
     def read_last_ticks(self, symbol: str, count: int = 10) -> Any:
         """Return online tick slices; ticks are not used as daily history."""
@@ -365,7 +381,8 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose get_last_tick()")
         if not symbol or count < 1:
             raise ValueError("symbol must not be empty and count must be positive")
-        return getter(symbol, count=count)
+        result = getter(symbol, count=count)
+        return self._raise_on_service_error(result, "get_last_tick", symbol)
 
     @staticmethod
     def _validate_range(start: str, end: str) -> None:
