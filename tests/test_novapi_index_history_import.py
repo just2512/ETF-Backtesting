@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from scripts.export_novapi_index_history import load_tracking_indices, weight_contract
+from datetime import date
+
+from scripts.export_novapi_index_history import (
+    load_tracking_indices,
+    month_end_trade_days,
+    weight_contract,
+)
 
 
 def test_tracking_index_names_are_read_from_the_project_universe():
@@ -32,3 +38,13 @@ def test_weight_contract_rejects_incomplete_or_unknown_totals():
         assert "refusing to infer units or normalize" in str(exc)
     else:
         raise AssertionError("incomplete weights must not be accepted")
+
+
+def test_index_snapshot_dates_are_start_session_plus_month_ends():
+    days = [
+        date(2022, 2, 8), date(2022, 2, 9), date(2022, 2, 28),
+        date(2022, 3, 1), date(2022, 3, 31), date(2022, 4, 1),
+    ]
+    assert month_end_trade_days(days, date(2022, 2, 8)) == [
+        date(2022, 2, 8), date(2022, 2, 28), date(2022, 3, 31), date(2022, 4, 1)
+    ]
