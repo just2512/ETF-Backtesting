@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from scripts.export_novapi_index_history import (
-    load_tracking_indices,
-    month_end_trade_days,
-    weight_contract,
-)
+import runpy
+
+
+_importer = runpy.run_path("scripts/export_novapi_index_history.py")
+load_tracking_indices = _importer["load_tracking_indices"]
+month_end_trade_days = _importer["month_end_trade_days"]
+weight_contract = _importer["weight_contract"]
 
 
 def test_tracking_index_names_are_read_from_the_project_universe():
