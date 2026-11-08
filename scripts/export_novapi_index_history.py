@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
 from etf_backtesting.data.index_history import export_index_snapshots
+from etf_backtesting.data.provider_errors import ProviderQuotaExceeded
 
 
 ETF_CONFIG = Path("config/etf_universe.yaml")
@@ -152,6 +153,22 @@ def weight_contract(raw: Any) -> tuple[str, str, str]:
     return symbol_field, weight_field, scale
 
 
+def month_end_trade_days(trade_days: list[date], start_date: date) -> list[date]:
+    """Return the first available session plus each month's final trading session."""
+    if not trade_days:
+        return []
+    selected = [day for day in trade_days if day >= start_date]
+    if not selected:
+        return []
+    result = [selected[0]]
+    for index, day in enumerate(selected):
+        next_day = selected[index + 1] if index + 1 < len(selected) else None
+        if next_day is None or (next_day.year, next_day.month) != (day.year, day.month):
+            if day != result[-1]:
+                result.append(day)
+    return result
+
+
 def retry(operation: Any, attempts: int, delay_seconds: float) -> Any:
     errors: list[str] = []
     for attempt in range(1, attempts + 1):
@@ -182,6 +199,8 @@ def main() -> int:
         "source": "NovAPI",
         "requested_start": args.start,
         "requested_end": args.end,
+        "snapshot_frequency": "MONTH_END_PLUS_RANGE_START",
+        "daily_snapshot_completeness": "UNKNOWN",
         "resolved_indices": {},
         "unresolved_indices": [],
         "results": [],
@@ -210,13 +229,16 @@ def main() -> int:
         report["trading_day_count"] = len(trade_days)
         report["first_trading_day"] = trade_days[0].isoformat() if trade_days else None
         report["last_trading_day"] = trade_days[-1].isoformat() if trade_days else None
+        snapshot_dates = month_end_trade_days(trade_days, start_date)
+        report["snapshot_date_count"] = len(snapshot_dates)
+        report["snapshot_dates"] = [day.isoformat() for day in snapshot_dates]
 
         tracking_indices = load_tracking_indices()
         for etf_symbol, index_id in resolved.items():
             try:
                 # Determine the provider's actual field names and weight units
                 # from one dated response. No fields or units are guessed.
-                sample_date = next((day for day in trade_days if day >= start_date), None)
+                sample_date = snapshot_dates[0] if snapshot_dates else None
                 if sample_date is None:
                     raise ValueError("trading calendar contains no date in the requested range")
                 raw = retry(
@@ -228,7 +250,7 @@ def main() -> int:
                 manifest = export_index_snapshots(
                     adapter,
                     index_id,
-                    trade_days,
+                    snapshot_dates,
                     symbol_field=symbol_field,
                     weight_field=weight_field,
                     weight_scale=scale,  # type: ignore[arg-type]
@@ -246,7 +268,7 @@ def main() -> int:
                     "symbol_field": symbol_field,
                     "weight_field": weight_field,
                     "weight_scale": scale,
-                    "snapshot_count": len(trade_days),
+                    "snapshot_count": len(snapshot_dates),
                     "manifest": manifest,
                 })
             except Exception as exc:
@@ -258,6 +280,9 @@ def main() -> int:
                     "error_type": type(exc).__name__,
                     "error": str(exc),
                 })
+                if isinstance(exc, ProviderQuotaExceeded):
+                    report["quota_exhausted"] = True
+                    break
     except Exception as exc:
         report["fatal_error"] = {
             "error_type": type(exc).__name__,
