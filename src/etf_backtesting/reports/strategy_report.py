@@ -289,7 +289,9 @@ def write_comparison_report(
             name: (relative_dir / Path(path).name).as_posix()
             for name, path in paths.items()
         }
-        artifact_paths[f"{safe_scope}_{strategy}"] = relative_files["summary"]
+        artifact_paths[f"{safe_scope}_{strategy}"] = (
+            output_dir / relative_dir / Path(paths["summary"]).name
+        ).as_posix()
         run_index.append({
             "strategy": strategy,
             "symbol_scope": scope,
