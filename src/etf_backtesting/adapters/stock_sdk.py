@@ -15,6 +15,7 @@ from typing import Any
 
 from etf_backtesting.contracts import PriceBar
 from etf_backtesting.data.audit import audit_daily_records, summarize_findings
+from etf_backtesting.data.provider_errors import ProviderQuotaExceeded
 
 
 class StockSDKAdapter:
@@ -188,9 +189,10 @@ class StockSDKAdapter:
         if isinstance(result, str):
             detail = result.strip()
             suffix = f" for {context}" if context else ""
-            raise ConnectionError(
-                f"online {api_name}{suffix} returned a service error string: {detail!r}"
-            )
+            message = f"online {api_name}{suffix} returned a service error string: {detail!r}"
+            if "测试期超2000次" in detail or "24小时内会重置" in detail:
+                raise ProviderQuotaExceeded(message)
+            raise ConnectionError(message)
         return result
 
     def _records_from_result(self, records: Any) -> list[Mapping[str, Any]]:
