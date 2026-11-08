@@ -120,3 +120,37 @@ def test_late_first_bar_never_passes_full_history_coverage(tmp_path: Path) -> No
     assert symbol["status"] == "PASS"
     assert symbol["first_date_status"] == "UNKNOWN"
     assert symbol["history_coverage_status"] == "UNKNOWN"
+
+
+def test_unconfigured_symbol_cannot_receive_full_history_pass(tmp_path: Path) -> None:
+    manifest = export_snapshot(
+        FakeRemoteAdapter(),
+        ["CUSTOM"],
+        tmp_path,
+        start="20000101",
+        end="20240104",
+        expected_first_dates={},
+    )
+
+    symbol = manifest["symbols"][0]
+    assert symbol["status"] == "PASS"
+    assert symbol["first_date_status"] == "NOT_CONFIGURED"
+    assert symbol["history_coverage_status"] == "UNKNOWN"
+
+
+def test_remote_export_writes_daily_gap_csv_with_unclassified_status(tmp_path: Path) -> None:
+    manifest = export_snapshot(
+        FakeRemoteAdapter(),
+        ["510300"],
+        tmp_path,
+        start="20240102",
+        end="20240104",
+        expected_first_dates={"510300": date(2024, 1, 2)},
+    )
+
+    report = manifest["calendar_gap_report"]
+    content = (tmp_path / "calendar_gaps.csv").read_text(encoding="utf-8-sig")
+    assert report["row_count"] == 1
+    assert len(report["sha256"]) == 64
+    assert "510300,2024-01-03,UNCLASSIFIED" in content
+    assert "suspension status was not supplied" in content
