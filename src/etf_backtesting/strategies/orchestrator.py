@@ -173,6 +173,7 @@ class StrategySignalOrchestrator:
         self,
         signal_date: date,
         todays_bars: Mapping[str, PriceBar],
+        ledger: PortfolioLedger,
         next_session: date,
     ) -> list[OrderIntent]:
         orders: list[OrderIntent] = []
