@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from datetime import date, datetime
 from enum import StrEnum
+from math import isfinite
 
 
 class AuditStatus(StrEnum):
@@ -35,16 +36,20 @@ class PriceBar:
             raise ValueError("symbol must not be empty")
         for field_name in ("open", "high", "low", "close"):
             value = getattr(self, field_name)
-            if value <= 0:
-                raise ValueError(f"{field_name} must be positive")
+            if not isfinite(value) or value <= 0:
+                raise ValueError(f"{field_name} must be finite and positive")
         if self.high < max(self.open, self.close, self.low):
             raise ValueError("high must be >= open, close, and low")
         if self.low > min(self.open, self.close, self.high):
             raise ValueError("low must be <= open, close, and high")
-        if self.volume is not None and self.volume < 0:
-            raise ValueError("volume must not be negative")
-        if self.amount is not None and self.amount < 0:
-            raise ValueError("amount must not be negative")
+        if self.volume is not None and (
+            not isfinite(self.volume) or self.volume < 0
+        ):
+            raise ValueError("volume must be finite and not negative")
+        if self.amount is not None and (
+            not isfinite(self.amount) or self.amount < 0
+        ):
+            raise ValueError("amount must be finite and not negative")
 
 
 @dataclass(frozen=True, slots=True)
