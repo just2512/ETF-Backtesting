@@ -1,0 +1,62 @@
+name: NovAPI cloud real-data import
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: novapi-real-data
+  cancel-in-progress: true
+
+jobs:
+  real-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      STOCKSDK_MODULE: stock_sdk
+      STOCKSDK_ONLINE_ENDPOINT: 106.75.217.246:12328
+      STOCKSDK_INIT_NATIVE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Install and verify official Linux NovAPI SDK
+        id: sdk_install
+        run: bash scripts/install_novapi_sdk.sh
+      - name: Export five ETF full-history snapshots
+        if: always() && steps.sdk_install.outcome == 'success'
+        run: |
+          python scripts/export_remote_history.py \
+            --symbols 510300 510880 513020 159928 159611 \
+            --start 20000101 \
+            --end "$(date -u +%Y%m%d)" \
+            --retry-attempts 3 \
+            --retry-delay-seconds 2 \
+            --output reports/novapi/etf-history
+      - name: Import full historical index constituents and weights
+        if: always() && steps.sdk_install.outcome == 'success'
+        run: |
+          python scripts/export_novapi_index_history.py \
+            --start 20220208 \
+            --end "$(date -u +%Y%m%d)" \
+            --retry-attempts 2 \
+            --retry-delay-seconds 2 \
+            --output data/snapshots/remote-stock-sdk/index-history
+      - name: Upload real provider responses and audit manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: novapi-real-data-${{ github.run_id }}
+          path: |
+            reports/novapi/
+            data/snapshots/remote-stock-sdk/
+          if-no-files-found: warn
+          retention-days: 30

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
+from etf_backtesting.data.provider_errors import ProviderQuotaExceeded
 
 
 RETRYABLE_REMOTE_ERRORS = (ConnectionError, TimeoutError, OSError)
@@ -141,7 +142,7 @@ def export_snapshot(
     requested_end = date(int(end[:4]), int(end[4:6]), int(end[6:8]))
     symbol_results: list[dict[str, object]] = []
     all_bars: dict[str, list[Any]] = {}
-    for symbol in symbols:
+    for symbol_index, symbol in enumerate(symbols):
         try:
             bars, attempts_used, retry_errors = _retry_remote_call(
                 lambda: adapter.read_daily_bars(symbol, start, end),
@@ -215,6 +216,22 @@ def export_snapshot(
                 "calendar_completeness": "UNKNOWN",
                 "unclassified_calendar_sessions": [],
             })
+            if isinstance(exc, ProviderQuotaExceeded):
+                for unattempted_symbol in symbols[symbol_index + 1:]:
+                    symbol_results.append({
+                        "symbol": unattempted_symbol,
+                        "status": "UNKNOWN",
+                        "attempts": 0,
+                        "retry_errors": [],
+                        "error_type": "ProviderQuotaExceeded",
+                        "error": "not requested because the provider quota was exhausted",
+                        "daily_bar_count": 0,
+                        "first_date": None,
+                        "last_date": None,
+                        "calendar_completeness": "UNKNOWN",
+                        "unclassified_calendar_sessions": [],
+                    })
+                break
 
     populated = list(all_bars.values())
     calendar_error: dict[str, str] | None = None
