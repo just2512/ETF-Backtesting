@@ -1,7 +1,25 @@
 free_stockdb:
   enabled: false
   status: "NOT_THE_ONLINE_PROVIDER"
-  note: "Local StockDB storage/query engine is not the NovAPI online API."
+  note: "Do not use this key as the NovAPI online provider."
+
+local_free_stockdb:
+  enabled: true
+  provider: "local free-stockdb StockDBClient"
+  host_env: "FREESTOCKDB_HOST"
+  default_host: "127.0.0.1"
+  port_env: "FREESTOCKDB_PORT"
+  default_port: 7899
+  password_env: "FREESTOCKDB_PASSWORD"
+  sdk_module_env: "FREESTOCKDB_SDK_MODULE"
+  default_sdk_module: "stock_sdk"
+  native_service_required: true
+  daily_price_api: "StockDBClient.get_data"
+  daily_price_basis: "UNADJUSTED"
+  daily_price_adjustment: "fq=None"
+  calendar_status: "UNKNOWN"
+  historical_index_constituents_status: "MISSING"
+  cash_dividend_events_status: "MISSING"
 
 stock_sdk:
   enabled: true
@@ -46,5 +64,3 @@ trading_calendar:
     - market
     - trade_date
     - is_open
-
-
