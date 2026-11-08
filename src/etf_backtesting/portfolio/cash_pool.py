@@ -62,7 +62,7 @@ class CashPoolAllocator:
         )
         for signal in sorted(signals, key=lambda item: (item.percent_b, item.symbol)):
             remaining_cap = signal.max_market_value - signal.current_market_value
-            amount = min(signal.desired_cash, remaining_cap, spendable)
+            amount = max(Decimal("0"), min(signal.desired_cash, remaining_cap, spendable))
             reason = "ALLOCATED" if amount > 0 else "CAP_OR_CASH_LIMIT"
             if amount > 0 and industry_context:
                 weights = industry_context.etf_constituent_weights.get(signal.symbol)
