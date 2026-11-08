@@ -153,6 +153,21 @@ def weight_contract(raw: Any) -> tuple[str, str, str]:
     return symbol_field, weight_field, scale
 
 
+def retry(operation: Any, attempts: int, delay_seconds: float) -> Any:
+    errors: list[str] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation()
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            errors.append(f"{type(exc).__name__}: {exc}")
+            if attempt == attempts:
+                raise ConnectionError(
+                    f"NovAPI request failed after {attempts} attempts: " + " | ".join(errors)
+                ) from exc
+            time.sleep(delay_seconds * (2 ** (attempt - 1)))
+    raise RuntimeError("unreachable retry state")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", default="20220208")
@@ -181,10 +196,18 @@ def main() -> int:
             f"{args.end[:4]}-{args.end[4:6]}-{args.end[6:8]}"
         )
         catalog_date = end_date.isoformat()
-        resolved, unresolved = resolve_index_ids(adapter, catalog_date)
+        resolved, unresolved = retry(
+            lambda: resolve_index_ids(adapter, catalog_date),
+            args.retry_attempts,
+            args.retry_delay_seconds,
+        )
         report["resolved_indices"] = resolved
         report["unresolved_indices"] = unresolved
-        trade_days = adapter.read_trade_days(args.start, args.end)
+        trade_days = retry(
+            lambda: adapter.read_trade_days(args.start, args.end),
+            args.retry_attempts,
+            args.retry_delay_seconds,
+        )
         report["trading_day_count"] = len(trade_days)
         report["first_trading_day"] = trade_days[0].isoformat() if trade_days else None
         report["last_trading_day"] = trade_days[-1].isoformat() if trade_days else None
@@ -195,7 +218,11 @@ def main() -> int:
             sample_date = next((day for day in trade_days if day >= start_date), None)
             if sample_date is None:
                 raise ValueError("trading calendar contains no date in the requested range")
-            raw = adapter.read_history_constituents(index_id, sample_date)
+            raw = retry(
+                lambda: adapter.read_history_constituents(index_id, sample_date),
+                args.retry_attempts,
+                args.retry_delay_seconds,
+            )
             symbol_field, weight_field, scale = weight_contract(raw)
             manifest = export_index_snapshots(
                 adapter,
