@@ -21,7 +21,7 @@ permissions:
   contents: read
 concurrency:
   group: eastmoney-research-backtest
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   research-backtest:
     runs-on: ubuntu-latest
