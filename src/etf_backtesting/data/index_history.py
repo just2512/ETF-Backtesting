@@ -29,6 +29,8 @@ def _retry_remote_call(operation: Any, attempts: int, delay_seconds: float) -> t
         except RETRYABLE_REMOTE_ERRORS as exc:
             errors.append({"attempt": str(attempt), "error_type": type(exc).__name__, "error": str(exc)})
             if attempt == attempts:
+                setattr(exc, "retry_errors", errors)
+                setattr(exc, "retry_attempts", attempt)
                 raise
             time.sleep(delay_seconds * (2 ** (attempt - 1)))
     raise RuntimeError("unreachable retry state")
