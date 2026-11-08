@@ -65,6 +65,9 @@ def main() -> int:
     if callable(securities_api):
         try:
             securities = securities_api(types=["index"], date=args.dates[-1])
+            securities = StockSDKAdapter._raise_on_service_error(
+                securities, "get_all_securities", "index catalog"
+            )
             report["index_security_catalog"] = describe(securities)
         except Exception as exc:
             report["index_security_catalog_error"] = {
