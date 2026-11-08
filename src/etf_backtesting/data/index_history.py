@@ -332,11 +332,12 @@ def export_index_snapshots(
         except Exception as exc:
             results.append({
                 "status": "UNKNOWN",
-                "attempts": retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1,
-                "retry_errors": [
-                    {"attempt": str(i + 1), "error_type": type(exc).__name__, "error": str(exc)}
-                    for i in range(retry_attempts if isinstance(exc, RETRYABLE_REMOTE_ERRORS) else 1)
-                ],
+                "attempts": getattr(exc, "retry_attempts", 1),
+                "retry_errors": getattr(
+                    exc,
+                    "retry_errors",
+                    [{"attempt": "1", "error_type": type(exc).__name__, "error": str(exc)}],
+                ),
                 "index_id": index_id,
                 "snapshot_date": snapshot_date.isoformat(),
                 "error_type": type(exc).__name__,
