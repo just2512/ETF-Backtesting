@@ -70,18 +70,19 @@ def main():
  out.mkdir(parents=True,exist_ok=True); mp=out/"data_manifest.json"; mp.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
  if len(bars)!=len(SYMBOLS): print(json.dumps(manifest,ensure_ascii=False,indent=2)); return 2
  days=sorted({b.trade_date for series in bars.values() for b in series})
- common_days=set.intersection(*({b.trade_date for b in series} for series in bars.values()))
- common_days=sorted(common_days)
- if not common_days: raise ValueError("no common observed trading dates across the five ETFs")
- months={}
- for d in common_days: months.setdefault((d.year,d.month),d)
- dca_dates=set(months.values())
- monthly=a.initial_cash/Decimal(len(dca_dates))
+ dca_dates_by_symbol={}
+ monthly_by_symbol={}
+ for symbol,series in bars.items():
+  months={}
+  for bar in series: months.setdefault((bar.trade_date.year,bar.trade_date.month),bar.trade_date)
+  if not months: raise ValueError("no monthly DCA dates for "+symbol)
+  dca_dates_by_symbol[symbol]=set(months.values())
+  monthly_by_symbol[symbol]=a.initial_cash/Decimal(len(months))
  per=a.initial_cash/Decimal(5)
  reserve=a.initial_cash/Decimal(10)
  costs=TradingCostModel(Decimal("0.00015"),Decimal("0.00004"),Decimal("0"))
- config={"purpose":"RESEARCH_ONLY_NOT_FORMAL_INVESTMENT_BACKTEST","provider":"Eastmoney push2his","price_basis":"UNADJUSTED","fqt":0,"symbols":list(SYMBOLS),"initial_cash_per_run":str(a.initial_cash),"external_contributions":"NONE","A":{"schedule":"first observed session each month","monthly_budget":str(monthly)},"B_C_D":{"per_etf_cycle_budget":str(per)},"D":{"per_etf_max_market_value":str(per),"market_value_cap_semantics":"BUY_ADMISSION_CEILING_ONLY; price drift above cap blocks additional buys and does not force liquidation","minimum_cash_reserve":str(reserve)},"fees":{"commission_rate":"0.00015","other_fee_rate":"0.00004","minimum_commission":"0","status":"RESEARCH_ASSUMPTION_NOT_BROKER_CONFIRMED"},"bollinger":{"period":20,"deviations":2.0,"ddof":0,"signal":"AFTER_CLOSE","execution":"NEXT_SESSION_OPEN"},"sell_mode":"S1","lot_size":100,"dividend_gate":"MISSING","execution_rules_gate":"UNKNOWN","research_only":True,"calendar":"UNION_OF_OBSERVED_ETF_DATES_NOT_OFFICIAL"}
- result=StrategyComparisonRunner(lot_size=100).run(bars,days,initial_cash=a.initial_cash,costs=costs,dca_budget_by_symbol={s:monthly for s in SYMBOLS},per_etf_cycle_budget={s:per for s in SYMBOLS},max_market_value_by_symbol={s:per for s in SYMBOLS},dca_dates=dca_dates,reserve_cash=reserve,sell_mode="S1",dividend_status="MISSING",execution_rules_status="UNKNOWN",research_only=True)
+ config={"purpose":"RESEARCH_ONLY_NOT_FORMAL_INVESTMENT_BACKTEST","provider":"Eastmoney push2his","price_basis":"UNADJUSTED","fqt":0,"symbols":list(SYMBOLS),"initial_cash_per_run":str(a.initial_cash),"external_contributions":"NONE","A":{"schedule":"first observed session of each ETF month; unspent allocation carries forward until one whole lot is affordable","monthly_budget_by_symbol":{s:str(v) for s,v in monthly_by_symbol.items()}},"B_C_D":{"per_etf_cycle_budget":str(per)},"D":{"per_etf_max_market_value":str(per),"market_value_cap_semantics":"BUY_ADMISSION_CEILING_ONLY; price drift above cap blocks additional buys and does not force liquidation","minimum_cash_reserve":str(reserve)},"fees":{"commission_rate":"0.00015","other_fee_rate":"0.00004","minimum_commission":"0","status":"RESEARCH_ASSUMPTION_NOT_BROKER_CONFIRMED"},"bollinger":{"period":20,"deviations":2.0,"ddof":0,"signal":"AFTER_CLOSE","execution":"NEXT_SESSION_OPEN"},"sell_mode":"S1","lot_size":100,"dividend_gate":"MISSING","execution_rules_gate":"UNKNOWN","research_only":True,"calendar":"UNION_OF_OBSERVED_ETF_DATES_NOT_OFFICIAL"}
+ result=StrategyComparisonRunner(lot_size=100).run(bars,days,initial_cash=a.initial_cash,costs=costs,dca_budget_by_symbol=monthly_by_symbol,per_etf_cycle_budget={s:per for s in SYMBOLS},max_market_value_by_symbol={s:per for s in SYMBOLS},dca_dates=dca_dates_by_symbol,reserve_cash=reserve,sell_mode="S1",dividend_status="MISSING",execution_rules_status="UNKNOWN",research_only=True)
  digest=hashlib.sha256(mp.read_bytes()+b"".join((raw/(s+".csv")).read_bytes() for s in SYMBOLS)).hexdigest()
  report=build_comparison_report(result,data_snapshot_sha256=digest,run_config=config); report["formal_comparison_allowed"]=False; report["data_audit"]=manifest
  paths=write_comparison_report(report,out/"comparison")
