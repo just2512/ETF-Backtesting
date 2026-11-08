@@ -108,6 +108,7 @@ class StrategySignalOrchestrator:
         if any(value <= 0 for value in self.per_etf_cycle_budget.values()):
             raise ValueError("all ETF cycle budgets must be positive")
         self.dca_dates = set(dca_dates or ())
+        self.dca_budget_accrued: dict[str, Decimal] = {}
         self.max_market_value_by_symbol = dict(max_market_value_by_symbol or {})
         if any(value <= 0 for value in self.max_market_value_by_symbol.values()):
             raise ValueError("all ETF market-value caps must be positive")
@@ -132,7 +133,7 @@ class StrategySignalOrchestrator:
         next_session: date,
     ) -> Sequence[OrderIntent]:
         if self.strategy == "A":
-            return self._fixed_dca_orders(signal_date, todays_bars, next_session)
+            return self._fixed_dca_orders(signal_date, todays_bars, ledger, next_session)
         if self.strategy in ("B", "C"):
             return self._single_etf_orders(
                 signal_date, todays_bars, ledger, next_session
@@ -174,21 +175,32 @@ class StrategySignalOrchestrator:
         todays_bars: Mapping[str, PriceBar],
         next_session: date,
     ) -> list[OrderIntent]:
-        if signal_date not in self.dca_dates:
-            return []
         orders: list[OrderIntent] = []
         for symbol, bar in sorted(todays_bars.items()):
             budget = self.dca_budget_by_symbol.get(symbol)
-            if budget is None:
+            if budget is None or signal_date not in self.dca_dates:
                 continue
             signal = fixed_dca_signal(symbol, signal_date, budget, scheduled=True)
             if signal is None:
+                continue
+            accrued = self.dca_budget_accrued.get(symbol, Decimal("0")) + signal.budget
+            self.dca_budget_accrued[symbol] = accrued
+            invested = sum(
+                (
+                    -event.cash_delta
+                    for event in ledger.events
+                    if event.event_type == "BUY" and event.symbol == symbol
+                ),
+                Decimal("0"),
+            )
+            available_budget = accrued - invested
+            if available_budget <= 0:
                 continue
             order = budget_to_buy_order(
                 symbol,
                 signal_date,
                 next_session,
-                signal.budget,
+                available_budget,
                 Decimal(str(bar.close)),
                 self.lot_size,
             )
