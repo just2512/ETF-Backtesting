@@ -24,6 +24,28 @@ class FakeRemoteAdapter:
         return [date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4)]
 
 
+def test_remote_export_retries_transient_service_errors_and_records_recovery(tmp_path: Path) -> None:
+    class FlakyAdapter(FakeRemoteAdapter):
+        calls = 0
+        def read_daily_bars(self, symbol: str, start: str, end: str):
+            self.calls += 1
+            if self.calls < 3:
+                raise ConnectionError("\\n执行查询时发生错误")
+            return super().read_daily_bars(symbol, start, end)
+
+    adapter = FlakyAdapter()
+    manifest = export_snapshot(
+        adapter, ["510300"], tmp_path, start="20240102", end="20240104",
+        expected_first_dates={"510300": date(2024, 1, 2)},
+        retry_attempts=3, retry_delay_seconds=0,
+    )
+    result = manifest["symbols"][0]
+    assert result["status"] == "PASS"
+    assert result["attempts"] == 3
+    assert len(result["retry_errors"]) == 2
+    assert result["retry_errors"][0]["error"] == "\\n执行查询时发生错误"
+
+
 def test_remote_export_writes_hashed_unadjusted_snapshot(tmp_path: Path) -> None:
     manifest = export_snapshot(
         FakeRemoteAdapter(),
