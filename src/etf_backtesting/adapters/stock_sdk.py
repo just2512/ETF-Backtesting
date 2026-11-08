@@ -46,6 +46,7 @@ class StockSDKAdapter:
         self.port = port
         self.online_endpoint = online_endpoint
         self.native_init_error: Exception | None = None
+        self._dataframe_mode_was_set = False
         self.history_api = (
             "get_price" if has_online_get_price else "rd.get_data"
         )
@@ -108,15 +109,7 @@ class StockSDKAdapter:
             raise ValueError("start must not be later than end")
 
         if callable(getattr(self.sdk, "get_price", None)):
-            records = self.sdk.get_price(
-                symbol,
-                start_date=start,
-                end_date=end,
-                frequency="daily",
-                fields=["open", "high", "low", "close", "volume", "money"],
-                fq=None,
-                panel=False,
-            )
+            records = self._read_price_dataframe(symbol, start, end)
         else:
             if self.native_init_error is not None:
                 raise ConnectionError(
@@ -142,8 +135,50 @@ class StockSDKAdapter:
             raise ValueError(f"duplicate daily bars returned for {symbol}")
         return bars
 
+    def _read_price_dataframe(self, symbol: str, start: str | None, end: str | None) -> Any:
+        """Call online get_price in df mode so each row carries its date.
+
+        In list mode (set_init(df=None)) the SDK drops the date column from
+        get_price results, which makes multi-day history ambiguous. The SDK
+        documents that df=True returns a DataFrame with dates in the index.
+        Open-ended ranges (start/end None) pass through unchanged.
+        """
+        setter = getattr(self.sdk, "set_init", None)
+        if callable(setter) and not self._dataframe_mode_was_set:
+            # df=True persists for the process; set once per adapter so callers
+            # that manage their own set_init state are not overridden silently.
+            setter(self.online_endpoint, df=True)
+            self._dataframe_mode_was_set = True
+        # Do not wrap SDK exceptions: probe/export layers classify per-symbol
+        # failures by the original exception type, and degraded online service
+        # errors must stay visible with their real identity.
+        records = self.sdk.get_price(
+            symbol,
+            start_date=start,
+            end_date=end,
+            frequency="daily",
+            fields=["open", "high", "low", "close", "volume", "money"],
+            fq=None,
+            panel=False,
+        )
+        # Live-service contract (verified 2026-11-08): the online API reports
+        # server-side failures by returning a bare error string ("执行查询时发
+        # 生错误") instead of raising. A string is never price data; surface
+        # the exact text instead of masking it as a schema problem.
+        return self._raise_on_service_error(records, "get_price", symbol)
+
     @staticmethod
-    def _records_from_result(records: Any) -> list[Mapping[str, Any]]:
+    def _raise_on_service_error(result: Any, api_name: str, context: str = "") -> Any:
+        """Convert the provider's bare-text failure response at the API boundary."""
+        if isinstance(result, str):
+            detail = result.strip()
+            suffix = f" for {context}" if context else ""
+            raise ConnectionError(
+                f"online {api_name}{suffix} returned a service error string: {detail!r}"
+            )
+        return result
+
+    def _records_from_result(self, records: Any) -> list[Mapping[str, Any]]:
         if records is None:
             return []
         if callable(getattr(records, "reset_index", None)):
@@ -181,7 +216,12 @@ class StockSDKAdapter:
         return normalized
 
     def read_trade_days(self, start: str, end: str) -> list[date]:
-        """Read the authoritative online trading calendar for a bounded interval."""
+        """Read the authoritative online trading calendar for a bounded interval.
+
+        Live-service contract (verified 2026-11-08): get_trade_days silently
+        returns an empty list for YYYYMMDD arguments; only dashed ISO dates
+        produce sessions. 8-digit input is therefore converted before the call.
+        """
         self._validate_range(start, end)
         calendar_api = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
         getter = getattr(self.sdk, calendar_api, None)
@@ -189,7 +229,10 @@ class StockSDKAdapter:
             raise TypeError(
                 f"stock_sdk module must expose configured trading-calendar API {calendar_api}()"
             )
-        result = getter(start_date=start, end_date=end)
+        result = getter(
+            start_date=self._dashed(start),
+            end_date=self._dashed(end),
+        )
         days = []
         for value in (() if result is None else result):
             if isinstance(value, datetime):
@@ -203,6 +246,10 @@ class StockSDKAdapter:
             raise ValueError("online trading calendar must be unique and ascending")
         return days
 
+    @staticmethod
+    def _dashed(value: str) -> str:
+        return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+
     def read_history_constituents(self, index_id: str, as_of: date) -> Any:
         """Return the provider's dated historical index constituent/weight snapshot."""
         if not index_id:
@@ -214,22 +261,31 @@ class StockSDKAdapter:
                 raise TypeError(
                     f"stock_sdk module must expose configured historical-index API {index_api}()"
                 )
-            return getter(index_id, date=as_of.isoformat())
+            result = getter(index_id, date=as_of.isoformat())
+            return self._raise_on_service_error(result, index_api, index_id)
 
         stocks_api = os.getenv("STOCKSDK_INDEX_STOCKS_API", "get_index_stocks")
         weights_api = os.getenv("STOCKSDK_INDEX_WEIGHTS_API", "get_index_weights")
         stocks_getter = getattr(self.sdk, stocks_api, None)
         weights_getter = getattr(self.sdk, weights_api, None)
         if callable(stocks_getter) and callable(weights_getter):
-            return {
-                "stocks": stocks_getter(index_id, date=as_of.isoformat()),
-                "weights": weights_getter(index_id, date=as_of.isoformat()),
-            }
+            stocks = self._raise_on_service_error(
+                stocks_getter(index_id, date=as_of.isoformat()),
+                stocks_api,
+                index_id,
+            )
+            weights = self._raise_on_service_error(
+                weights_getter(index_id, date=as_of.isoformat()),
+                weights_api,
+                index_id,
+            )
+            return {"stocks": stocks, "weights": weights}
 
         fallback_api = "get_history_constituents"
         fallback_getter = getattr(self.sdk, fallback_api, None)
         if callable(fallback_getter):
-            return fallback_getter(index_id, date=as_of.isoformat())
+            result = fallback_getter(index_id, date=as_of.isoformat())
+            return self._raise_on_service_error(result, fallback_api, index_id)
         raise TypeError(
             "stock_sdk must expose either the configured combined index API or "
             f"both {stocks_api}() and {weights_api}()"
@@ -315,7 +371,8 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose get_fundamentals()")
         if not stat_date:
             raise ValueError("stat_date must not be empty")
-        return getter(query_object, statDate=stat_date)
+        result = getter(query_object, statDate=stat_date)
+        return self._raise_on_service_error(result, "get_fundamentals", stat_date)
 
     def read_last_ticks(self, symbol: str, count: int = 10) -> Any:
         """Return online tick slices; ticks are not used as daily history."""
@@ -324,7 +381,8 @@ class StockSDKAdapter:
             raise TypeError("stock_sdk module must expose get_last_tick()")
         if not symbol or count < 1:
             raise ValueError("symbol must not be empty and count must be positive")
-        return getter(symbol, count=count)
+        result = getter(symbol, count=count)
+        return self._raise_on_service_error(result, "get_last_tick", symbol)
 
     @staticmethod
     def _validate_range(start: str, end: str) -> None:

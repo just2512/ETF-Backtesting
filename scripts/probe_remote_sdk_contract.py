@@ -301,9 +301,12 @@ def main() -> int:
         calendar_getter = getattr(sdk, calendar_api_name, None)
         if callable(calendar_getter) and online_init_error is None:
             try:
+                # Live-service contract (verified 2026-11-08): get_trade_days
+                # silently returns [] for YYYYMMDD arguments; only dashed ISO
+                # dates produce sessions.
                 trade_days = calendar_getter(
-                    start_date=calendar_start,
-                    end_date=calendar_end,
+                    start_date=f"{calendar_start[:4]}-{calendar_start[4:6]}-{calendar_start[6:8]}",
+                    end_date=f"{calendar_end[:4]}-{calendar_end[4:6]}-{calendar_end[6:8]}",
                 )
                 trade_days = list(trade_days or [])
                 calendar_status = "PASS" if trade_days else "UNKNOWN"

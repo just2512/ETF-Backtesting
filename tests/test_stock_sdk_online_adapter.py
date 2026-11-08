@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
+from etf_backtesting.data.index_history import export_index_snapshots
 
 
 class OnlineSDK:
@@ -16,6 +17,7 @@ class OnlineSDK:
         self.price_kwargs: dict[str, object] | None = None
         self.calendar_kwargs: dict[str, object] | None = None
         self.constituent_call: tuple[object, ...] | None = None
+        self.df_mode_set = False
         self.rd = SimpleNamespace(get=self.native_get)
 
     def init(self, host: str, port: int) -> None:
@@ -23,8 +25,10 @@ class OnlineSDK:
         if self.native_error:
             raise self.native_error
 
-    def set_init(self, endpoint: str) -> None:
+    def set_init(self, endpoint: str, *, df: object = None) -> None:
         self.online_endpoint = endpoint
+        if df is True:
+            self.df_mode_set = True
 
     def get_price(self, symbol: str, **kwargs: object) -> list[dict[str, object]]:
         self.price_kwargs = kwargs
@@ -103,11 +107,25 @@ def test_online_calendar_and_historical_constituents_use_explicit_dates() -> Non
     ]
     adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
 
+    # Live-service contract: YYYYMMDD calendar arguments silently return an
+    # empty session list, so the adapter must send dashed ISO dates.
     assert sdk.calendar_kwargs == {
-        "start_date": "20240101",
-        "end_date": "20240131",
+        "start_date": "2024-01-01",
+        "end_date": "2024-01-31",
     }
     assert sdk.constituent_call == ("000300.XSHG", "2020-06-30")
+
+
+def test_online_price_requires_dataframe_mode_for_dated_rows() -> None:
+    sdk = OnlineSDK()
+    adapter = make_adapter(sdk)
+
+    bars = adapter.read_daily_bars("510300", "20240101", "20240131")
+    assert [bar.trade_date.isoformat() for bar in bars] == ["2024-01-02", "2024-01-03"]
+
+    # list-mode get_price drops the date column (verified against the live
+    # service), so the adapter must switch the SDK to df mode before querying.
+    assert sdk.df_mode_set is True
 
 
 def test_native_channel_failure_is_reported_only_when_native_is_used() -> None:
@@ -119,3 +137,56 @@ def test_native_channel_failure_is_reported_only_when_native_is_used() -> None:
 
     # The online API remains usable despite the independent native failure.
     assert adapter.read_daily_bars("510300")
+
+
+
+@pytest.mark.parametrize("failing_api", ["get_index_stocks", "get_index_weights"])
+def test_index_api_service_error_string_becomes_connection_error(failing_api: str) -> None:
+    sdk = OnlineSDK()
+    setattr(sdk, "get_index_stocks", lambda *args, **kwargs: (
+        "\n执行查询时发生错误" if failing_api == "get_index_stocks" else ["A", "B"]
+    ))
+    setattr(sdk, "get_index_weights", lambda *args, **kwargs: (
+        "\n执行查询时发生错误" if failing_api == "get_index_weights" else {"A": "0.4", "B": "0.6"}
+    ))
+    adapter = make_adapter(sdk)
+
+    with pytest.raises(ConnectionError, match="执行查询时发生错误") as exc_info:
+        adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+    assert failing_api in str(exc_info.value)
+    assert "000300.XSHG" in str(exc_info.value)
+
+
+def test_combined_index_api_service_error_string_becomes_connection_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sdk = OnlineSDK()
+    sdk.get_combined_index = lambda *args, **kwargs: "\n执行查询时发生错误"
+    monkeypatch.setenv("STOCKSDK_INDEX_API", "get_combined_index")
+    adapter = make_adapter(sdk)
+
+    with pytest.raises(ConnectionError, match="执行查询时发生错误"):
+        adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+
+def test_index_export_manifest_preserves_provider_connection_error(tmp_path) -> None:
+    sdk = OnlineSDK()
+    sdk.get_index_stocks = lambda *args, **kwargs: "\n执行查询时发生错误"
+    sdk.get_index_weights = lambda *args, **kwargs: {"A": "0.4", "B": "0.6"}
+    adapter = make_adapter(sdk)
+
+    manifest = export_index_snapshots(
+        adapter,
+        "000300.XSHG",
+        [date(2020, 6, 30)],
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+        output_dir=tmp_path,
+    )
+
+    result = manifest["results"][0]
+    assert result["status"] == "UNKNOWN"
+    assert result["error_type"] == "ConnectionError"
+    assert "执行查询时发生错误" in result["error"]
