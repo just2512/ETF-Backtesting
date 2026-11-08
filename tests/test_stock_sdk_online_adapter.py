@@ -224,3 +224,14 @@ def test_cloud_environment_allows_endpoint_override(monkeypatch):
 
     assert adapter.online_endpoint == "203.0.113.10:12328"
     assert sdk.native_calls == []
+
+
+def test_calendar_service_error_string_is_preserved():
+    sdk = OnlineSDK()
+    sdk.get_trade_days = lambda **kwargs: "\\n执行查询时发生错误"
+    adapter = make_adapter(sdk)
+
+    with pytest.raises(ConnectionError, match="执行查询时发生错误") as exc_info:
+        adapter.read_trade_days("20240101", "20240131")
+
+    assert "get_trade_days" in str(exc_info.value)
