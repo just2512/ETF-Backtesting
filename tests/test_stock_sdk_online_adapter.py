@@ -144,10 +144,10 @@ def test_native_channel_failure_is_reported_only_when_native_is_used() -> None:
 def test_index_api_service_error_string_becomes_connection_error(failing_api: str) -> None:
     sdk = OnlineSDK()
     setattr(sdk, "get_index_stocks", lambda *args, **kwargs: (
-        "\\n执行查询时发生错误" if failing_api == "get_index_stocks" else ["A", "B"]
+        "\n执行查询时发生错误" if failing_api == "get_index_stocks" else ["A", "B"]
     ))
     setattr(sdk, "get_index_weights", lambda *args, **kwargs: (
-        "\\n执行查询时发生错误" if failing_api == "get_index_weights" else {"A": "0.4", "B": "0.6"}
+        "\n执行查询时发生错误" if failing_api == "get_index_weights" else {"A": "0.4", "B": "0.6"}
     ))
     adapter = make_adapter(sdk)
 
@@ -162,7 +162,7 @@ def test_combined_index_api_service_error_string_becomes_connection_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sdk = OnlineSDK()
-    sdk.get_combined_index = lambda *args, **kwargs: "\\n执行查询时发生错误"
+    sdk.get_combined_index = lambda *args, **kwargs: "\n执行查询时发生错误"
     monkeypatch.setenv("STOCKSDK_INDEX_API", "get_combined_index")
     adapter = make_adapter(sdk)
 
@@ -172,7 +172,7 @@ def test_combined_index_api_service_error_string_becomes_connection_error(
 
 def test_index_export_manifest_preserves_provider_connection_error(tmp_path) -> None:
     sdk = OnlineSDK()
-    sdk.get_index_stocks = lambda *args, **kwargs: "\\n执行查询时发生错误"
+    sdk.get_index_stocks = lambda *args, **kwargs: "\n执行查询时发生错误"
     sdk.get_index_weights = lambda *args, **kwargs: {"A": "0.4", "B": "0.6"}
     adapter = make_adapter(sdk)
 
