@@ -235,3 +235,18 @@ def test_calendar_service_error_string_is_preserved():
         adapter.read_trade_days("20240101", "20240131")
 
     assert "get_trade_days" in str(exc_info.value)
+
+
+def test_cloud_environment_ignores_invalid_local_port(monkeypatch):
+    import sys
+
+    sdk = OnlineSDK()
+    monkeypatch.setitem(sys.modules, "novapi_test_stock_sdk", sdk)
+    monkeypatch.setenv("STOCKSDK_MODULE", "novapi_test_stock_sdk")
+    monkeypatch.setenv("STOCKSDK_PORT", "not-a-port")
+    monkeypatch.delenv("STOCKSDK_INIT_NATIVE", raising=False)
+
+    adapter = StockSDKAdapter.from_environment()
+
+    assert adapter.online_endpoint == "106.75.217.246:12328"
+    assert sdk.native_calls == []
