@@ -1,0 +1,53 @@
+name: Eastmoney cloud research backtest
+
+on:
+  workflow_dispatch:
+    inputs:
+      initial_cash:
+        description: Research-only initial cash in CNY
+        required: true
+        default: "10000"
+      start:
+        description: Start date YYYYMMDD
+        required: true
+        default: "20070118"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/run_eastmoney_research.py"
+      - ".github/workflows/eastmoney-research-backtest.yml"
+
+permissions:
+  contents: read
+concurrency:
+  group: eastmoney-research-backtest
+  cancel-in-progress: false
+jobs:
+  research-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+      - name: Fetch Eastmoney data and run research-only A/B/C/D
+        run: |
+          python scripts/run_eastmoney_research.py \
+            --initial-cash "10000" \
+            --start "20070118" \
+            --end "$(date -u +%Y%m%d)" \
+            --retry-attempts 4 \
+            --retry-delay-seconds 2 \
+            --output reports/eastmoney/${{ github.run_id }}
+      - name: Upload raw data, audit manifest and interactive HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eastmoney-etf-backtest-${{ github.run_id }}
+          path: reports/eastmoney/
+          if-no-files-found: warn
+          retention-days: 30
