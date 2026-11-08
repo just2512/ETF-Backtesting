@@ -20,7 +20,7 @@ stock_sdk:
   historical_index_constituents_api: "get_index_stocks"
   historical_index_weights_api: "get_index_weights"
   index_date_parameter: "date"
-  index_snapshot_frequency: "MONTH_END_PLUS_RANGE_START"
+  index_snapshot_frequency: "MONTH_END_PLUS_RANGE_START_AND_LATEST"
   online_test_quota_requests: 2000
   online_test_quota_reset_hours: 24
   bulk_history_transport: "LOCAL_STOCKDB_OR_AUTHORIZED_MIRROR"
