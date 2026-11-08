@@ -281,7 +281,9 @@ def export_snapshot(
         "frequency": "daily",
         "calendar_source": "get_trade_days",
         "calendar_trade_day_count": len(trade_days),
-        "calendar_status": "PASS" if calendar_error is None else "UNKNOWN",\n        "calendar_attempts": locals().get("calendar_attempts", 0),\n        "calendar_retry_errors": locals().get("calendar_retry_errors", []),
+        "calendar_status": "PASS" if calendar_error is None else "UNKNOWN",
+        "calendar_attempts": locals().get("calendar_attempts", 0),
+        "calendar_retry_errors": locals().get("calendar_retry_errors", []),
         "calendar_error": calendar_error,
         "calendar_gap_report": {
             "file": gap_report_path.as_posix(),
