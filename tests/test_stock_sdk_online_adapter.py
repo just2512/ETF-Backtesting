@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from etf_backtesting.adapters.stock_sdk import StockSDKAdapter
+from etf_backtesting.data.index_history import export_index_snapshots
 
 
 class OnlineSDK:
@@ -136,3 +137,56 @@ def test_native_channel_failure_is_reported_only_when_native_is_used() -> None:
 
     # The online API remains usable despite the independent native failure.
     assert adapter.read_daily_bars("510300")
+
+
+
+@pytest.mark.parametrize("failing_api", ["get_index_stocks", "get_index_weights"])
+def test_index_api_service_error_string_becomes_connection_error(failing_api: str) -> None:
+    sdk = OnlineSDK()
+    setattr(sdk, "get_index_stocks", lambda *args, **kwargs: (
+        "\\n执行查询时发生错误" if failing_api == "get_index_stocks" else ["A", "B"]
+    ))
+    setattr(sdk, "get_index_weights", lambda *args, **kwargs: (
+        "\\n执行查询时发生错误" if failing_api == "get_index_weights" else {"A": "0.4", "B": "0.6"}
+    ))
+    adapter = make_adapter(sdk)
+
+    with pytest.raises(ConnectionError, match="执行查询时发生错误") as exc_info:
+        adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+    assert failing_api in str(exc_info.value)
+    assert "000300.XSHG" in str(exc_info.value)
+
+
+def test_combined_index_api_service_error_string_becomes_connection_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sdk = OnlineSDK()
+    sdk.get_combined_index = lambda *args, **kwargs: "\\n执行查询时发生错误"
+    monkeypatch.setenv("STOCKSDK_INDEX_API", "get_combined_index")
+    adapter = make_adapter(sdk)
+
+    with pytest.raises(ConnectionError, match="执行查询时发生错误"):
+        adapter.read_history_constituents("000300.XSHG", date(2020, 6, 30))
+
+
+def test_index_export_manifest_preserves_provider_connection_error(tmp_path) -> None:
+    sdk = OnlineSDK()
+    sdk.get_index_stocks = lambda *args, **kwargs: "\\n执行查询时发生错误"
+    sdk.get_index_weights = lambda *args, **kwargs: {"A": "0.4", "B": "0.6"}
+    adapter = make_adapter(sdk)
+
+    manifest = export_index_snapshots(
+        adapter,
+        "000300.XSHG",
+        [date(2020, 6, 30)],
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+        output_dir=tmp_path,
+    )
+
+    result = manifest["results"][0]
+    assert result["status"] == "UNKNOWN"
+    assert result["error_type"] == "ConnectionError"
+    assert "执行查询时发生错误" in result["error"]
