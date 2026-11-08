@@ -66,6 +66,34 @@ def _write_symbol_csv(path: Path, symbol: str, bars: list[Any]) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _write_calendar_gap_report(
+    path: Path,
+    gaps_by_symbol: dict[str, list[date]],
+) -> str:
+    """Write every missing exchange session without guessing suspension status."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".part")
+    with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=("symbol", "trade_date", "classification", "reason"),
+        )
+        writer.writeheader()
+        for symbol in sorted(gaps_by_symbol):
+            for day in sorted(gaps_by_symbol[symbol]):
+                writer.writerow({
+                    "symbol": symbol,
+                    "trade_date": day.isoformat(),
+                    "classification": "UNCLASSIFIED",
+                    "reason": (
+                        "exchange calendar session has no daily bar; "
+                        "suspension status was not supplied by the source"
+                    ),
+                })
+    temporary.replace(path)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def export_snapshot(
     adapter: StockSDKAdapter,
     symbols: list[str],
@@ -135,8 +163,8 @@ def export_snapshot(
                 "first_date_status": first_date_status,
                 "history_coverage_status": (
                     "REJECT" if first_date_status == "REJECT"
-                    else "UNKNOWN" if first_date_status == "UNKNOWN"
-                    else "PASS"
+                    else "PASS" if first_date_status == "PASS"
+                    else "UNKNOWN"
                 ),
                 "calendar_completeness": "UNKNOWN",
                 "unclassified_calendar_sessions": [],
@@ -176,6 +204,7 @@ def export_snapshot(
             "message": "No successful price series exists from which to request a calendar",
         }
 
+    gaps_by_symbol: dict[str, list[date]] = {}
     for result in symbol_results:
         symbol = str(result["symbol"])
         bars = all_bars.get(symbol, [])
@@ -191,6 +220,7 @@ def export_snapshot(
         ]
         observed = {bar.trade_date for bar in bars}
         gaps = sorted(set(expected) - observed)
+        gaps_by_symbol[symbol] = gaps
         result["calendar_completeness"] = "PASS" if not gaps else "UNKNOWN"
         if result.get("first_date_status") in ("UNKNOWN", "REJECT"):
             result["history_coverage_status"] = result["first_date_status"]
@@ -200,6 +230,8 @@ def export_snapshot(
             day.isoformat() for day in gaps
         ]
 
+    gap_report_path = output_dir / "calendar_gaps.csv"
+    gap_report_sha256 = _write_calendar_gap_report(gap_report_path, gaps_by_symbol)
     manifest: dict[str, object] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "requested_start": start,
@@ -213,6 +245,12 @@ def export_snapshot(
         "calendar_trade_day_count": len(trade_days),
         "calendar_status": "PASS" if calendar_error is None else "UNKNOWN",
         "calendar_error": calendar_error,
+        "calendar_gap_report": {
+            "file": gap_report_path.as_posix(),
+            "sha256": gap_report_sha256,
+            "row_count": sum(len(value) for value in gaps_by_symbol.values()),
+            "classification": "UNCLASSIFIED",
+        },
         "symbols": symbol_results,
     }
     _atomic_write(
