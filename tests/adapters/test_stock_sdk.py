@@ -26,7 +26,7 @@ class FakeSDK:
     def init(self, host, port):
         self.init_args = (host, port)
 
-    def set_init(self, endpoint):
+    def set_init(self, endpoint, df=None, cpu=None):
         self.endpoint = endpoint
 
     def get_price(self, symbol, **kwargs):
@@ -125,6 +125,20 @@ def test_universe_probe_keeps_per_symbol_connection_failures_visible():
     assert report["symbols"][0]["daily_bar_status"] == "PASS"
     assert report["symbols"][1]["daily_bar_status"] == "UNKNOWN"
     assert report["symbols"][1]["error_type"] == "ConnectionError"
+
+
+def test_online_service_error_string_is_a_connection_error_not_bad_schema():
+    sdk, adapter = make_adapter()
+
+    def get_price(*args, **kwargs):
+        # Live-service contract: server failures come back as a bare string.
+        return "\n执行查询时发生错误"
+
+    sdk.get_price = get_price
+    report = adapter.probe_universe(["510300"])
+    assert report["symbols"][0]["daily_bar_status"] == "UNKNOWN"
+    assert report["symbols"][0]["error_type"] == "ConnectionError"
+    assert "执行查询时发生错误" in report["symbols"][0]["error"]
 
 
 def test_native_connection_failure_does_not_block_online_reads():

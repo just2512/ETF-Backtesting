@@ -46,6 +46,7 @@ class StockSDKAdapter:
         self.port = port
         self.online_endpoint = online_endpoint
         self.native_init_error: Exception | None = None
+        self._dataframe_mode_was_set = False
         self.history_api = (
             "get_price" if has_online_get_price else "rd.get_data"
         )
@@ -108,15 +109,7 @@ class StockSDKAdapter:
             raise ValueError("start must not be later than end")
 
         if callable(getattr(self.sdk, "get_price", None)):
-            records = self.sdk.get_price(
-                symbol,
-                start_date=start,
-                end_date=end,
-                frequency="daily",
-                fields=["open", "high", "low", "close", "volume", "money"],
-                fq=None,
-                panel=False,
-            )
+            records = self._read_price_dataframe(symbol, start, end)
         else:
             if self.native_init_error is not None:
                 raise ConnectionError(
@@ -142,8 +135,44 @@ class StockSDKAdapter:
             raise ValueError(f"duplicate daily bars returned for {symbol}")
         return bars
 
-    @staticmethod
-    def _records_from_result(records: Any) -> list[Mapping[str, Any]]:
+    def _read_price_dataframe(self, symbol: str, start: str | None, end: str | None) -> Any:
+        """Call online get_price in df mode so each row carries its date.
+
+        In list mode (set_init(df=None)) the SDK drops the date column from
+        get_price results, which makes multi-day history ambiguous. The SDK
+        documents that df=True returns a DataFrame with dates in the index.
+        Open-ended ranges (start/end None) pass through unchanged.
+        """
+        setter = getattr(self.sdk, "set_init", None)
+        if callable(setter) and not self._dataframe_mode_was_set:
+            # df=True persists for the process; set once per adapter so callers
+            # that manage their own set_init state are not overridden silently.
+            setter(self.online_endpoint, df=True)
+            self._dataframe_mode_was_set = True
+        # Do not wrap SDK exceptions: probe/export layers classify per-symbol
+        # failures by the original exception type, and degraded online service
+        # errors must stay visible with their real identity.
+        records = self.sdk.get_price(
+            symbol,
+            start_date=start,
+            end_date=end,
+            frequency="daily",
+            fields=["open", "high", "low", "close", "volume", "money"],
+            fq=None,
+            panel=False,
+        )
+        # Live-service contract (verified 2026-11-08): the online API reports
+        # server-side failures by returning a bare error string ("执行查询时发
+        # 生错误") instead of raising. A string is never price data; surface
+        # the exact text instead of masking it as a schema problem.
+        if isinstance(records, str):
+            raise ConnectionError(
+                f"online get_price returned a service error string for {symbol}: "
+                f"{records.strip()!r}"
+            )
+        return records
+
+    def _records_from_result(self, records: Any) -> list[Mapping[str, Any]]:
         if records is None:
             return []
         if callable(getattr(records, "reset_index", None)):
@@ -181,7 +210,12 @@ class StockSDKAdapter:
         return normalized
 
     def read_trade_days(self, start: str, end: str) -> list[date]:
-        """Read the authoritative online trading calendar for a bounded interval."""
+        """Read the authoritative online trading calendar for a bounded interval.
+
+        Live-service contract (verified 2026-11-08): get_trade_days silently
+        returns an empty list for YYYYMMDD arguments; only dashed ISO dates
+        produce sessions. 8-digit input is therefore converted before the call.
+        """
         self._validate_range(start, end)
         calendar_api = os.getenv("STOCKSDK_TRADE_DAYS_API", "get_trade_days")
         getter = getattr(self.sdk, calendar_api, None)
@@ -189,7 +223,10 @@ class StockSDKAdapter:
             raise TypeError(
                 f"stock_sdk module must expose configured trading-calendar API {calendar_api}()"
             )
-        result = getter(start_date=start, end_date=end)
+        result = getter(
+            start_date=self._dashed(start),
+            end_date=self._dashed(end),
+        )
         days = []
         for value in (() if result is None else result):
             if isinstance(value, datetime):
@@ -202,6 +239,10 @@ class StockSDKAdapter:
         if days != sorted(set(days)):
             raise ValueError("online trading calendar must be unique and ascending")
         return days
+
+    @staticmethod
+    def _dashed(value: str) -> str:
+        return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
 
     def read_history_constituents(self, index_id: str, as_of: date) -> Any:
         """Return the provider's dated historical index constituent/weight snapshot."""

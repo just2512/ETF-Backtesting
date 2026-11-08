@@ -247,3 +247,36 @@
 - 历史指数真实多日期权重快照及权重字段/单位确认：尚未生成。
 - 官方分红公告事件与逐标的完整覆盖文件：尚未生成，分红门禁仍 MISSING。
 - 历史逐日 bid/ask、涨跌停/封板、停牌状态和经确认费用参数：尚未齐备，正式执行门禁仍 UNKNOWN。
+
+
+## 2026-11-08 真实运行环境交付（Jerry 本机）
+
+云端要求的 SDK 契约与真实快照在本机完成取证，详见 [STOCK_SDK_RUNTIME_CONTRACT.md](STOCK_SDK_RUNTIME_CONTRACT.md)；机器可读契约 `reports/audit/remote_sdk_contract.json` 已生成（本地保留，不入库）。
+
+### 取得的 SDK 契约（云端清单逐项回应）
+
+- `stock_sdk.__file__` = `D:\stockdb\pybao\stock_sdk.py`；底层 `stockdb.pyd` 注入 RemoteProxy。模块级可调用 72 个。
+- 实测签名：`init(host='127.0.0.1', port=7899, socket_timeout=None, password=None, warm=True)`；`set_init(ip='', df=None, cpu=None)`；`get_price/get_bars/get_trade_days/get_index_stocks/get_index_weights/get_history_constituents/get_last_tick/get_security_info` 为 RemoteProxy（无 Python 签名）；`get_fundamentals(query_object, date=None, statDate=None)`。
+- 原始返回样本记录于契约 JSON（日历 43 交易日 PASS；price/bars/index 在探测时点返回服务端错误字符串）。
+
+### 依契约发现并修复的三个适配器缺陷（本轮提交）
+
+1. **日历日期格式**：`get_trade_days` 传 `YYYYMMDD` 静默返回 `[]`（实测），仅短横线格式有效。`read_trade_days` 现在内部转换 8 位日期；`scripts/probe_remote_sdk_contract.py` 同步修复。
+2. **`get_price` 列表模式丢日期列**（2026-11-07 实测 `[{'open':..,'close':..}]` 无 date；文档 §12.2 证实 df 模式日期在索引）：`read_daily_bars` 现在先 `set_init(endpoint, df=True)` 再查询。
+3. **服务端故障返回裸错误字符串而非异常**（2026-11-08 实测 `"\n执行查询时发生错误"`）：适配器现将其识别为 ConnectionError 并携带原文，不再伪装成 TypeError 数据结构问题。
+
+测试：本机 pytest **134 passed**（新增错误字符串识别、df 模式、日历格式断言）；ruff 由 CI 执行。
+
+### 真实服务状态（2026-11-08 探测时点）
+
+- `get_trade_days` 正常（日历 PASS）；其余在线查询 API（price/bars/index/tick/security）返回服务端错误字符串——同一服务 2026-11-07 曾全部正常，属供应商端波动而非契约消失。
+- K线库 7899 拒连、7898 协议不匹配（与 2026-11-07 结论一致）。
+- 真实五只ETF快照导出已运行：manifest 诚实记录五只全部 UNKNOWN + ConnectionError（服务端原文），无伪造数据；`get_price` 恢复后重跑 `scripts/export_remote_history.py` 即可产出真实 CSV。
+- 本地 `数据更新.exe` 同步链路健康（`ah/ad.123128.xyz` 可达），但源数据仅提供 510300/159928 自 2024-01-02 起的日线，与 2026-11-07 结论一致。
+
+### 阻断项更新
+
+- ~~SDK 运行时契约待核对~~ → 已取得（本节）。
+- 远程五只ETF真实快照 → 适配器契约已对齐，等待供应商 `get_price` 服务恢复后重跑导出。
+- 历史指数字段/单位确认 → `get_index_stocks/get_index_weights` 待服务恢复后按契约 JSON 取样。
+- 分红事件、历史执行上下文、费用参数门禁 → 保持 MISSING/UNKNOWN，无变化。
