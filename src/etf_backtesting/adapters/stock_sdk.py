@@ -51,12 +51,9 @@ class StockSDKAdapter:
             "get_price" if has_online_get_price else "rd.get_data"
         )
 
-        # The native StockDB port and online API are separate services. A
-        # refused native connection must not short-circuit online initialization.
-        try:
-            sdk.init(host, port)
-        except Exception as exc:  # surfaced through native-channel methods
-            self.native_init_error = exc
+        # The native StockDB port and online API are separate services.
+        # Do not touch the local native channel unless explicitly requested by
+        # a caller; cloud jobs need only the provider's online endpoint.
         sdk.set_init(online_endpoint)
 
     @classmethod
@@ -71,30 +68,30 @@ class StockSDKAdapter:
 
     @classmethod
     def from_environment(cls) -> StockSDKAdapter:
-        # The default cloud path is the HTTP-only free-stockdb SDK. Its
-        # compatibility init() is a no-op, so a local/native StockDB host is
-        # not required. A custom/native SDK can still override STOCKSDK_HOST.
+        # NovAPI is the online provider. Its endpoint is configured by
+        # set_init(); the local StockDB native channel is independent and is
+        # deliberately not initialized in cloud jobs.
         host = os.getenv("STOCKSDK_HOST", "127.0.0.1")
         port_text = os.getenv("STOCKSDK_PORT", "7899")
-        endpoint = os.getenv("STOCKSDK_ONLINE_ENDPOINT")
-        if not endpoint:
-            raise ValueError(
-                "STOCKSDK_ONLINE_ENDPOINT must be configured; "
-                "do not embed service addresses or credentials in source control"
-            )
+        endpoint = os.getenv(
+            "STOCKSDK_ONLINE_ENDPOINT", "106.75.217.246:12328"
+        )
         try:
             port = int(port_text)
         except ValueError as exc:
             raise ValueError("STOCKSDK_PORT must be an integer") from exc
-        return cls.connect(
+        adapter = cls.connect(
             host=host,
             port=port,
             online_endpoint=endpoint,
-            sdk_module=os.getenv(
-                "STOCKSDK_MODULE",
-                "etf_backtesting.adapters.free_stockdb_http_sdk",
-            ),
+            sdk_module=os.getenv("STOCKSDK_MODULE", "stock_sdk"),
         )
+        if os.getenv("STOCKSDK_INIT_NATIVE", "false").lower() in {"1", "true", "yes"}:
+            try:
+                adapter.sdk.init(host, port)
+            except Exception as exc:
+                adapter.native_init_error = exc
+        return adapter
 
     def read_daily_bars(
         self,
