@@ -47,7 +47,7 @@ jobs:
           python scripts/export_novapi_index_history.py \
             --start 20220208 \
             --end "$(date -u +%Y%m%d)" \
-            --retry-attempts 3 \
+            --retry-attempts 2 \
             --retry-delay-seconds 2 \
             --output data/snapshots/remote-stock-sdk/index-history
       - name: Upload real provider responses and audit manifests
