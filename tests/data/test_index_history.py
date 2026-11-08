@@ -143,3 +143,58 @@ def test_separate_index_api_mismatch_is_rejected() -> None:
             weight_field="weight",
             weight_scale="fraction",
         )
+
+
+def test_index_export_reports_dated_constituent_and_weight_changes(tmp_path: Path) -> None:
+    class DatedAdapter:
+        def read_history_constituents(self, index_id: str, as_of: date):
+            if as_of == date(2020, 6, 30):
+                return [
+                    {"code": "A", "weight": "0.4"},
+                    {"code": "B", "weight": "0.6"},
+                ]
+            return [
+                {"code": "A", "weight": "0.5"},
+                {"code": "C", "weight": "0.5"},
+            ]
+
+    manifest = export_index_snapshots(
+        DatedAdapter(),
+        "000300.XSHG",
+        [date(2020, 6, 30), date(2026, 11, 6)],
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+        output_dir=tmp_path,
+    )
+
+    semantics = manifest["historical_date_semantics"]
+    assert semantics["status"] == "PASS"
+    comparison = semantics["comparisons"][0]
+    assert comparison["added_count"] == 1
+    assert comparison["removed_count"] == 1
+    assert comparison["changed_weight_count"] == 1
+    assert semantics["diff_row_count"] == 3
+    assert len(semantics["diff_sha256"]) == 64
+    assert (tmp_path / "temporal_diff.csv").exists()
+
+
+def test_identical_dated_index_snapshots_remain_unknown(tmp_path: Path) -> None:
+    class StaticAdapter:
+        def read_history_constituents(self, index_id: str, as_of: date):
+            return [
+                {"code": "A", "weight": "0.4"},
+                {"code": "B", "weight": "0.6"},
+            ]
+
+    manifest = export_index_snapshots(
+        StaticAdapter(),
+        "000300.XSHG",
+        [date(2020, 6, 30), date(2026, 11, 6)],
+        symbol_field="code",
+        weight_field="weight",
+        weight_scale="fraction",
+        output_dir=tmp_path,
+    )
+
+    assert manifest["historical_date_semantics"]["status"] == "UNKNOWN"
