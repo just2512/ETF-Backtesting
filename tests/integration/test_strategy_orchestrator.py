@@ -308,3 +308,22 @@ def test_streaming_bollinger_value_matches_full_history_calculation() -> None:
         expected = expected_points[-1]
         assert actual == (None if expected is None else expected.percent_b)
 
+def test_fixed_dca_carries_unspent_monthly_budget_until_a_lot_is_affordable() -> None:
+    result = StrategyBacktestRunner(lot_size=100).run(
+        "A",
+        {"510300": bars("510300", [1, 1, 1, 1, 1])},
+        DAYS,
+        initial_cash=Decimal("1000"),
+        costs=free_costs(),
+        dividend_status="UNKNOWN",
+        execution_rules_status="UNKNOWN",
+        research_only=True,
+        dca_budget_by_symbol={"510300": Decimal("60")},
+        dca_dates=set(DAYS[:4]),
+    )
+    filled = [item for item in result.execution.executions if item.status == "FILLED"]
+    assert len(filled) == 2
+    assert [item.execution_date for item in filled] == [DAYS[2], DAYS[4]]
+    assert result.execution.ledger.positions["510300"] == Decimal("200")
+    assert result.execution.ledger.cash == Decimal("800")
+
