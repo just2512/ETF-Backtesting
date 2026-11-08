@@ -318,7 +318,8 @@ def main() -> int:
             adapter, args.symbols, Path(args.output),
             start=args.start, end=args.end,
             retry_attempts=args.retry_attempts,
-            retry_delay_seconds=args.retry_delay_seconds,\n        )
+            retry_delay_seconds=args.retry_delay_seconds,
+        )
     except Exception as exc:
         print(
             f"remote snapshot export failed: {type(exc).__name__}: {exc}",
