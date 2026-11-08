@@ -233,7 +233,7 @@ def main() -> int:
         report["snapshot_date_count"] = len(snapshot_dates)
         report["snapshot_dates"] = [day.isoformat() for day in snapshot_dates]
         estimated_max_requests = (
-            2
+            2 * args.retry_attempts
             + len(resolved) * 2 * args.retry_attempts
             + len(resolved) * len(snapshot_dates) * 2 * args.retry_attempts
         )
@@ -282,6 +282,12 @@ def main() -> int:
                     "snapshot_count": len(snapshot_dates),
                     "manifest": manifest,
                 })
+                if any(
+                    item.get("error_type") == "ProviderQuotaExceeded"
+                    for item in manifest["results"]
+                ):
+                    report["quota_exhausted"] = True
+                    break
             except Exception as exc:
                 report["results"].append({
                     "status": "UNKNOWN",
