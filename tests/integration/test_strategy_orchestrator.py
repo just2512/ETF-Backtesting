@@ -276,3 +276,35 @@ def test_dividend_pass_requires_official_snapshot_hash() -> None:
             dca_budget_by_symbol={"510300": Decimal("1000")},
             dca_dates=set(),
         )
+
+
+def test_streaming_bollinger_value_matches_full_history_calculation() -> None:
+    from etf_backtesting.indicators.bollinger import bollinger_bands
+    from etf_backtesting.strategies.orchestrator import StrategySignalOrchestrator
+
+    closes = [10.0, 11.0, 9.0, 12.0, 10.0, 8.0, 9.5]
+    orchestrator = StrategySignalOrchestrator(
+        "B",
+        per_etf_cycle_budget={"510300": Decimal("1000")},
+        bollinger_period=3,
+        bollinger_deviations=1.0,
+    )
+    for index, close in enumerate(closes):
+        bar = PriceBar(
+            symbol="510300",
+            trade_date=DAYS[index % len(DAYS)],
+            open=close,
+            high=close + 0.2,
+            low=close - 0.2,
+            close=close,
+            volume=1000,
+            amount=close * 1000,
+            source="fixture",
+        )
+        actual = orchestrator._update_indicators("510300", bar)
+        expected_points = bollinger_bands(
+            closes[: index + 1], period=3, deviations=1.0
+        )
+        expected = expected_points[-1]
+        assert actual == (None if expected is None else expected.percent_b)
+\n
