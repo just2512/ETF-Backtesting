@@ -302,7 +302,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--symbols", nargs="+", default=list(DEFAULT_SYMBOLS))
     parser.add_argument("--start", default="20000101")
-    parser.add_argument("--end", default=date.today().strftime("%Y%m%d"))\n    parser.add_argument("--retry-attempts", type=int, default=3)\n    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
+    parser.add_argument("--end", default=date.today().strftime("%Y%m%d"))
+    parser.add_argument("--retry-attempts", type=int, default=3)
+    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
     parser.add_argument(
         "--output",
         default="data/snapshots/remote-stock-sdk",
@@ -314,7 +316,9 @@ def main() -> int:
         adapter = StockSDKAdapter.from_environment()
         manifest = export_snapshot(
             adapter, args.symbols, Path(args.output),
-            start=args.start, end=args.end,\n            retry_attempts=args.retry_attempts,\n            retry_delay_seconds=args.retry_delay_seconds,\n        )
+            start=args.start, end=args.end,
+            retry_attempts=args.retry_attempts,
+            retry_delay_seconds=args.retry_delay_seconds,\n        )
     except Exception as exc:
         print(
             f"remote snapshot export failed: {type(exc).__name__}: {exc}",
