@@ -190,3 +190,37 @@ def test_index_export_manifest_preserves_provider_connection_error(tmp_path) -> 
     assert result["status"] == "UNKNOWN"
     assert result["error_type"] == "ConnectionError"
     assert "执行查询时发生错误" in result["error"]
+
+
+def test_cloud_environment_uses_novapi_without_local_native_init(monkeypatch):
+    import sys
+
+    sdk = OnlineSDK()
+    monkeypatch.setitem(sys.modules, "novapi_test_stock_sdk", sdk)
+    monkeypatch.setenv("STOCKSDK_MODULE", "novapi_test_stock_sdk")
+    monkeypatch.delenv("STOCKSDK_ONLINE_ENDPOINT", raising=False)
+    monkeypatch.delenv("STOCKSDK_INIT_NATIVE", raising=False)
+
+    adapter = StockSDKAdapter.from_environment()
+
+    assert sdk.online_endpoint == "106.75.217.246:12328"
+    assert sdk.native_calls == []
+    assert adapter.native_init_error is None
+    assert adapter.read_trade_days("20240101", "20240131") == [
+        date(2024, 1, 2), date(2024, 1, 3)
+    ]
+
+
+def test_cloud_environment_allows_endpoint_override(monkeypatch):
+    import sys
+
+    sdk = OnlineSDK()
+    monkeypatch.setitem(sys.modules, "novapi_test_stock_sdk", sdk)
+    monkeypatch.setenv("STOCKSDK_MODULE", "novapi_test_stock_sdk")
+    monkeypatch.setenv("STOCKSDK_ONLINE_ENDPOINT", "203.0.113.10:12328")
+    monkeypatch.delenv("STOCKSDK_INIT_NATIVE", raising=False)
+
+    adapter = StockSDKAdapter.from_environment()
+
+    assert adapter.online_endpoint == "203.0.113.10:12328"
+    assert sdk.native_calls == []
