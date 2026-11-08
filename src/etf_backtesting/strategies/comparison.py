@@ -47,7 +47,7 @@ class StrategyComparisonRunner:
         dca_budget_by_symbol: Mapping[str, Decimal],
         per_etf_cycle_budget: Mapping[str, Decimal],
         max_market_value_by_symbol: Mapping[str, Decimal],
-        dca_dates: set[date],
+        dca_dates: set[date] | Mapping[str, set[date]],
         reserve_cash: Decimal,
         sell_mode: str,
         dividend_status: GateStatus,
@@ -80,6 +80,10 @@ class StrategyComparisonRunner:
         calendar = tuple(trading_days)
         if not calendar or list(calendar) != sorted(set(calendar)):
             raise ValueError("trading_days must be non-empty, unique, and ascending")
+        if isinstance(dca_dates, Mapping):
+            missing_dca = sorted(set(symbols) - set(dca_dates))
+            if missing_dca:
+                raise ValueError(f"dca_dates missing symbols: {missing_dca}")
 
         shared_options = {
             "initial_cash": initial_cash,
@@ -99,26 +103,32 @@ class StrategyComparisonRunner:
         single_etf_runs: dict[str, dict[str, StrategyRunResult]] = {}
         for symbol in symbols:
             single_bars = {symbol: bars_by_symbol[symbol]}
+            single_calendar = tuple(sorted({bar.trade_date for bar in bars_by_symbol[symbol]}))
+            symbol_dca_dates = (
+                dca_dates[symbol] if isinstance(dca_dates, Mapping) else dca_dates
+            )
+            if not set(symbol_dca_dates).issubset(set(single_calendar)):
+                raise ValueError(f"dca_dates contains dates without bars for {symbol}")
             single_etf_runs[symbol] = {
                 "A": self.runner.run(
                     "A",
                     single_bars,
-                    calendar,
+                    single_calendar,
                     dca_budget_by_symbol={symbol: dca_budget_by_symbol[symbol]},
-                    dca_dates=dca_dates,
+                    dca_dates=set(symbol_dca_dates),
                     **shared_options,
                 ),
                 "B": self.runner.run(
                     "B",
                     single_bars,
-                    calendar,
+                    single_calendar,
                     per_etf_cycle_budget={symbol: per_etf_cycle_budget[symbol]},
                     **shared_options,
                 ),
                 "C": self.runner.run(
                     "C",
                     single_bars,
-                    calendar,
+                    single_calendar,
                     per_etf_cycle_budget={symbol: per_etf_cycle_budget[symbol]},
                     sell_mode=sell_mode,
                     **shared_options,
