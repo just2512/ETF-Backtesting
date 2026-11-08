@@ -3,7 +3,7 @@ name: NovAPI cloud real-data import
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 1 * * 1-5"
+    - cron: "17 5 * * 1-5"
 
 permissions:
   contents: read
@@ -31,12 +31,6 @@ jobs:
       - name: Install and verify official Linux NovAPI SDK
         id: sdk_install
         run: bash scripts/install_novapi_sdk.sh
-      - name: Probe five ETF histories from the real online API
-        id: probe
-        run: |
-          python scripts/probe_stock_sdk.py \
-            --symbols 510300 510880 513020 159928 159611 \
-            --output reports/novapi/stock_sdk_probe.json
       - name: Export five ETF full-history snapshots
         if: always() && steps.sdk_install.outcome == 'success'
         run: |
@@ -47,13 +41,6 @@ jobs:
             --retry-attempts 3 \
             --retry-delay-seconds 2 \
             --output reports/novapi/etf-history
-      - name: Probe historical index constituents and weights
-        if: always() && steps.sdk_install.outcome == 'success'
-        run: |
-          python scripts/probe_novapi_index_contract.py \
-            --index-id 000300.XSHG \
-            --dates 2020-06-30 2026-11-06 \
-            --output reports/novapi/index-api-contract.json
       - name: Import full historical index constituents and weights
         if: always() && steps.sdk_install.outcome == 'success'
         run: |
