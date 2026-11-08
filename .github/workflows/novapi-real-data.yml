@@ -1,14 +1,16 @@
 name: NovAPI cloud real-data import
 
 on:
-  push:
-    branches: [main, "fix/**"]
   workflow_dispatch:
   schedule:
     - cron: "17 1 * * 1-5"
 
 permissions:
   contents: read
+
+concurrency:
+  group: novapi-real-data
+  cancel-in-progress: true
 
 jobs:
   real-data:
