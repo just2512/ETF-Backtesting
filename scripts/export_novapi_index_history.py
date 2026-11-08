@@ -154,7 +154,7 @@ def weight_contract(raw: Any) -> tuple[str, str, str]:
 
 
 def month_end_trade_days(trade_days: list[date], start_date: date) -> list[date]:
-    """Return the first available session plus each month's final trading session."""
+    """Return range start, each month's final session, and the latest available session."""
     if not trade_days:
         return []
     selected = [day for day in trade_days if day >= start_date]
@@ -199,7 +199,7 @@ def main() -> int:
         "source": "NovAPI",
         "requested_start": args.start,
         "requested_end": args.end,
-        "snapshot_frequency": "MONTH_END_PLUS_RANGE_START",
+        "snapshot_frequency": "MONTH_END_PLUS_RANGE_START_AND_LATEST",
         "daily_snapshot_completeness": "UNKNOWN",
         "resolved_indices": {},
         "unresolved_indices": [],
