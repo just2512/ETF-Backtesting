@@ -243,6 +243,7 @@ class StockSDKAdapter:
             start_date=self._dashed(start),
             end_date=self._dashed(end),
         )
+        result = self._raise_on_service_error(result, calendar_api, f"{start}..{end}")
         days = []
         for value in (() if result is None else result):
             if isinstance(value, datetime):
